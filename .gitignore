@@ -7,6 +7,8 @@ node_modules/
 frontend/node_modules/
 dist/
 frontend/dist/
+bun.lock
+frontend/bun.lock
 
 # Runtime data
 data/
