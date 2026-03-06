@@ -1,0 +1,21 @@
+# Rust
+target/
+**/target/
+
+# Node / Vite
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+
+# Runtime data
+data/
+backend/data/
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+
+# Logs
+*.log
