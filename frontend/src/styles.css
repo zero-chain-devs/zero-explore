@@ -1,7 +1,18 @@
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  color: #111827;
-  background: #f6f8fb;
+  color: #212529;
+  background: #f8f9fa;
+  --bg-page: #f8f9fa;
+  --bg-surface: #ffffff;
+  --border: #e7eaf3;
+  --muted: #6c757d;
+  --text-primary: #212529;
+  --text-secondary: #4a5568;
+  --link: #0784c3;
+  --hero-a: #0c2b57;
+  --hero-b: #0b3c75;
+  --hero-c: #071f40;
+  --btn-blue: #0784c3;
 }
 
 * {
@@ -13,7 +24,7 @@ body {
 }
 
 a {
-  color: #2563eb;
+  color: var(--link);
   text-decoration: none;
 }
 
@@ -29,8 +40,8 @@ a {
 
 .market-strip {
   height: 30px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
 }
 
 .market-strip-inner {
@@ -42,11 +53,11 @@ a {
   gap: 18px;
   padding: 0 14px;
   font-size: 11px;
-  color: #475569;
+  color: var(--muted);
 }
 
 .market-item b {
-  color: #0f172a;
+  color: var(--text-primary);
 }
 
 .market-item .down {
@@ -56,8 +67,8 @@ a {
 
 .main-nav {
   height: 56px;
-  background: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
 }
 
 .main-nav-inner {
@@ -71,7 +82,7 @@ a {
 }
 
 .brand a {
-  color: #1e3a8a;
+  color: #21325b;
   font-weight: 700;
   font-size: 36px;
   letter-spacing: -0.3px;
@@ -83,7 +94,7 @@ a {
 }
 
 .nav-links a {
-  color: #374151;
+  color: #3f4a5a;
   font-size: 13px;
   font-weight: 500;
 }
@@ -98,7 +109,7 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #334155;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -118,10 +129,10 @@ a {
 }
 
 .ghost-btn {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   border-radius: 999px;
   background: #fff;
-  color: #475569;
+  color: var(--text-secondary);
   font-size: 11px;
   padding: 5px 9px;
   cursor: pointer;
@@ -136,7 +147,7 @@ a {
 .hero {
   margin-top: 0;
   border-radius: 0 0 10px 10px;
-  background: radial-gradient(circle at 20% 24%, #12396f 0%, #0b2f5f 34%, #072143 100%);
+  background: radial-gradient(circle at 20% 24%, var(--hero-b) 0%, var(--hero-a) 36%, var(--hero-c) 100%);
   color: #fff;
   padding: 20px 16px 24px;
 }
@@ -159,7 +170,7 @@ a {
   grid-template-columns: 126px 1fr 44px;
   gap: 0;
   background: #fff;
-  border: 1px solid #60a5fa;
+  border: 1px solid #5bb4e2;
   border-radius: 9px;
   overflow: hidden;
 }
@@ -173,29 +184,29 @@ a {
 }
 
 .hero-search select {
-  border-right: 1px solid #e5e7eb;
-  background: #f8fafc;
-  color: #334155;
+  border-right: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-secondary);
 }
 
 .hero-search button {
   border: 0;
-  background: #0ea5e9;
+  background: var(--btn-blue);
   color: #fff;
   font-size: 14px;
   cursor: pointer;
 }
 
 .hero-ad {
-  background: #fff;
-  color: #0f172a;
+  background: var(--bg-surface);
+  color: var(--text-primary);
   border-radius: 8px;
-  border: 1px solid #dbe2ea;
+  border: 1px solid var(--border);
   overflow: hidden;
 }
 
 .hero-ad-label {
-  background: #e2e8f0;
+  background: #f1f3f5;
   font-size: 10px;
   padding: 2px 8px;
   text-align: right;
@@ -212,7 +223,7 @@ a {
 }
 
 .hero-ad-sub {
-  color: #475569;
+  color: var(--muted);
   font-size: 11px;
 }
 
@@ -224,8 +235,8 @@ a {
 }
 
 .hero-metrics-grid {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -235,7 +246,7 @@ a {
 
 .metric-card {
   padding: 12px 14px 13px;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid var(--border);
 }
 
 .metric-card:last-child {
@@ -243,7 +254,7 @@ a {
 }
 
 .metric-title {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 10px;
   letter-spacing: 0.04em;
 }
@@ -251,7 +262,7 @@ a {
 .metric-value {
   margin-top: 5px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 21px;
 }
 
@@ -287,12 +298,12 @@ a {
 }
 
 .section {
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 10px;
   padding: 12px 0 0;
   margin-bottom: 16px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
 }
 
 .section h2 {
@@ -300,7 +311,7 @@ a {
   font-size: 18px;
   font-weight: 600;
   padding: 0 14px 12px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border);
 }
 
 .home-twin {
@@ -311,8 +322,8 @@ a {
 }
 
 .home-panel {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -324,7 +335,7 @@ a {
   align-items: center;
   justify-content: space-between;
   padding: 0 10px 0 12px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border);
 }
 
 .home-panel-head h3 {
@@ -340,13 +351,13 @@ a {
 }
 
 .card {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px;
 }
 
 .card-title {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -358,7 +369,7 @@ a {
 .card-hint {
   margin-top: 6px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--muted);
   word-break: break-all;
 }
 
@@ -370,7 +381,7 @@ a {
 
 .table th,
 .table td {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border);
   text-align: left;
   padding: 10px 12px;
 }
@@ -385,7 +396,7 @@ a {
 }
 
 .json-box {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px;
   background: #fafafa;
@@ -398,7 +409,7 @@ a {
 }
 
 .muted {
-  color: #6b7280;
+  color: var(--muted);
   margin-bottom: 8px;
 }
 
@@ -410,7 +421,7 @@ a {
 }
 
 .k {
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .v {
@@ -439,7 +450,7 @@ a {
 }
 
 .row-end {
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border);
   text-align: center;
   font-size: 11px;
   letter-spacing: 0.02em;
@@ -466,7 +477,7 @@ a {
 }
 
 .pager button {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   background: #fff;
   padding: 6px 12px;
   border-radius: 6px;
@@ -486,7 +497,7 @@ a {
 }
 
 .quick-nav a {
-  color: #4b5563;
+  color: var(--text-secondary);
 }
 
 .search-links {
@@ -497,7 +508,7 @@ a {
 }
 
 .search-links a {
-  color: #4b5563;
+  color: var(--text-secondary);
 }
 
 .range-bar {
@@ -508,14 +519,14 @@ a {
 }
 
 .range-bar input {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 8px;
   width: 120px;
 }
 
 .range-bar button {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   border-radius: 6px;
   background: #fff;
   padding: 6px 10px;
@@ -524,7 +535,7 @@ a {
 
 .copy-btn {
   margin-left: 6px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   border-radius: 6px;
   background: #fff;
   font-size: 11px;
@@ -539,12 +550,12 @@ a {
 }
 
 .tiny-btn {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   background: #fff;
   border-radius: 6px;
   padding: 2px 7px;
   font-size: 11px;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .list-rows {
@@ -557,14 +568,14 @@ a {
   gap: 10px;
   align-items: center;
   padding: 12px 12px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border);
 }
 
 .row-icon {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  border: 1px solid #dbe2ea;
+  border: 1px solid var(--border);
   color: #94a3b8;
   display: inline-flex;
   align-items: center;
@@ -579,7 +590,7 @@ a {
 
 .row-top {
   font-size: 13px;
-  color: #1e293b;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -588,15 +599,15 @@ a {
 .row-sub {
   margin-top: 3px;
   font-size: 11px;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .amount-pill {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 2px 7px;
   font-size: 10px;
-  color: #334155;
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -665,7 +676,7 @@ a {
 
   .hero-search select {
     border-right: 0;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border);
   }
 
   .hero-metrics-grid {
@@ -674,7 +685,7 @@ a {
 
   .metric-card {
     border-right: 0;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border);
   }
 
   .metric-card:last-child {
