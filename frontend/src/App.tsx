@@ -278,26 +278,28 @@ function HomePage() {
 
       <HeroMetrics stats={stats} />
 
-      <div className="split2 dashboard-panels">
-        <Section title="Latest Blocks">
-          <div className="panel-head-end">
+      <div className="home-twin">
+        <article className="home-panel">
+          <div className="home-panel-head">
+            <h3>Latest Blocks</h3>
             <button className="tiny-btn" type="button">Customize</button>
           </div>
           <HomeBlockRows items={blocks?.items ?? []} />
           <div className="row-end">
             <Link to="/blocks">VIEW ALL BLOCKS →</Link>
           </div>
-        </Section>
+        </article>
 
-        <Section title="Latest Transactions">
-          <div className="panel-head-end">
+        <article className="home-panel">
+          <div className="home-panel-head">
+            <h3>Latest Transactions</h3>
             <button className="tiny-btn" type="button">Customize</button>
           </div>
           <HomeTxRows items={recentCompute?.items ?? []} />
           <div className="row-end">
             <Link to="/search/tx">VIEW ALL TRANSACTIONS →</Link>
           </div>
-        </Section>
+        </article>
       </div>
 
       <Section title="Hot Addresses">
