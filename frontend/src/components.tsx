@@ -13,20 +13,39 @@ export function Shell({
   children: ReactNode;
   lamp?: NetworkLamp;
 }) {
+  const lampLabel = lamp?.rpc_ok ? "RPC OK" : "RPC DOWN";
+
   return (
     <div className="shell">
-      <header className="topbar">
-        <div className="brand">
-          <Link to="/">Zero Explorer</Link>
+      <header className="site-header">
+        <div className="market-strip">
+          <div className="market-strip-inner">
+            <span className="market-item">ZERO Price: <b>$1.973</b> <em className="down">-4.97%</em></span>
+            <span className="market-item">Gas: <b>0.308 Gwei</b></span>
+          </div>
         </div>
-        <nav className="nav">
-          <Link to="/">Home</Link>
-          <Link to="/blocks">Blocks</Link>
-          <span className="lamp-wrap" title={lamp?.detail ?? "network status unknown"}>
-            <span className={`lamp ${lamp?.rpc_ok ? "green" : "red"}`} />
-            <span>{lamp?.rpc_ok ? "RPC OK" : "RPC DOWN"}</span>
-          </span>
-        </nav>
+
+        <div className="main-nav">
+          <div className="main-nav-inner">
+            <div className="brand">
+              <Link to="/">ZeroScan</Link>
+            </div>
+            <nav className="nav-links">
+              <Link to="/">Home</Link>
+              <Link to="/blocks">Blockchain</Link>
+              <Link to="/search/tx">Transactions</Link>
+              <Link to="/search/address">Addresses</Link>
+              <Link to="/search/domain">Domains</Link>
+            </nav>
+            <div className="nav-right">
+              <span className="lamp-wrap" title={lamp?.detail ?? "network status unknown"}>
+                <span className={`lamp ${lamp?.rpc_ok ? "green" : "red"}`} />
+                <span>{lampLabel}</span>
+              </span>
+              <button className="ghost-btn" type="button">Sign In</button>
+            </div>
+          </div>
+        </div>
       </header>
       <main className="content">{children}</main>
     </div>

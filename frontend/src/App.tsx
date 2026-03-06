@@ -84,6 +84,97 @@ function KeyValueGrid({ data }: { data: Record<string, unknown> }) {
   );
 }
 
+function HeroSearch({ smartRedirect = false }: { smartRedirect?: boolean }) {
+  const [text, setText] = useState("");
+  const nav = useNavigate();
+
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    const q = text.trim();
+    if (!q) return;
+
+    if (smartRedirect) {
+      if (isAddressLike(q)) {
+        nav(`/accounts/${encodeURIComponent(q)}`);
+        return;
+      }
+      if (/^\d+$/.test(q)) {
+        nav(`/blocks/${encodeURIComponent(q)}`);
+        return;
+      }
+      if (isHashLike(q)) {
+        nav(`/tx/${encodeURIComponent(q)}`);
+        return;
+      }
+
+      try {
+        const result = await api.search(q);
+        if (result.canonical_route) {
+          nav(result.canonical_route);
+          return;
+        }
+      } catch {
+        // ignore and fallback below
+      }
+    }
+
+    nav(`/search/${encodeURIComponent(q)}`);
+  };
+
+  return (
+    <section className="hero">
+      <div className="hero-inner">
+        <div className="hero-left">
+          <div className="hero-title">The ZeroChain Blockchain Explorer</div>
+          <form className="hero-search" onSubmit={onSubmit}>
+            <select defaultValue="all" aria-label="filter">
+              <option value="all">All Filters</option>
+            </select>
+            <input
+              placeholder="Search by Address / Txn Hash / Block / Object / Output / Domain"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+            <button type="submit">🔍</button>
+          </form>
+        </div>
+        <div className="hero-ad">
+          <div className="hero-ad-label">Ad</div>
+          <div className="hero-ad-body">
+            <div className="hero-ad-title">Earn up to 8% on ZRC-20 tokens</div>
+            <div className="hero-ad-sub">Eligibility and terms apply.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HeroMetrics({ stats }: { stats: NetworkStats | null }) {
+  return (
+    <section className="hero-metrics">
+      <div className="hero-metrics-grid">
+        <div className="metric-card">
+          <div className="metric-title">ZERO PRICE</div>
+          <div className="metric-value">$1.973 <span className="metric-sub">(-4.97%)</span></div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-title">TRANSACTIONS</div>
+          <div className="metric-value">{stats ? `${stats.latest_block_number * 130} (est.)` : "-"}</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-title">MED GAS PRICE</div>
+          <div className="metric-value">{stats?.gas_price ?? "-"}</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-title">LAST FINALIZED BLOCK</div>
+          <div className="metric-value">{stats?.latest_block_number ?? "-"}</div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function HomePage() {
   const [stats, setStats] = useState<NetworkStats | null>(null);
   const [blocks, setBlocks] = useState<BlockListResponse | null>(null);
@@ -130,98 +221,86 @@ function HomePage() {
 
   return (
     <>
-      <SearchBar smartRedirect />
+      <HeroSearch smartRedirect />
       {error ? <div className="error">[{errorCode}] {error}</div> : null}
 
-      <Section title="ZeroChain Overview">
+      <HeroMetrics stats={stats} />
+
+      <Section title="Network Snapshot">
         <div className="grid4">
           <StatCard title="Chain ID" value={stats?.chain_id ?? "-"} />
           <StatCard title="Network ID" value={stats?.network_id ?? "-"} />
-          <StatCard
-            title="Latest Height"
-            value={String(stats?.latest_block_number ?? "-")}
-          />
           <StatCard title="Mining" value={stats?.mining ? "ON" : "OFF"} />
-          <StatCard title="Node Hashrate" value={stats?.hashrate ?? "-"} />
-          <StatCard title="Gas Price" value={stats?.gas_price ?? "-"} />
-          <StatCard
-            title="Coinbase"
-            value={shortenHash(stats?.coinbase ?? "-")}
-            hint={stats?.coinbase}
-          />
           <StatCard title="Latest Time" value={toDate(stats?.latest_block_timestamp)} />
         </div>
       </Section>
 
-      <Section title="Recent Activity">
-        <div className="split2">
-          <div>
-            <h3>Latest Blocks</h3>
-            <table className="table compact">
-              <thead>
-                <tr>
-                  <th>Height</th>
-                  <th>Hash</th>
-                  <th>Miner</th>
-                  <th>Age</th>
+      <div className="split2 dashboard-panels">
+        <Section title="Latest Blocks">
+          <table className="table compact">
+            <thead>
+              <tr>
+                <th>Height</th>
+                <th>Miner</th>
+                <th>Txns</th>
+                <th>Age</th>
+              </tr>
+            </thead>
+            <tbody>
+              {blocks?.items.slice(0, 6).map((b) => (
+                <tr key={b.hash}>
+                  <td>
+                    <Link to={`/blocks/${b.number}`}>{b.number}</Link>
+                  </td>
+                  <td>
+                    <Link to={`/accounts/${b.miner}`}>{shortenHash(b.miner, 8)}</Link>
+                  </td>
+                  <td>{b.tx_count}</td>
+                  <td>{toRelativeTime(b.timestamp)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {blocks?.items.map((b) => (
-                  <tr key={b.hash}>
-                    <td>
-                      <Link to={`/blocks/${b.number}`}>{b.number}</Link>
-                    </td>
-                    <td title={b.hash}>
-                      {shortenHash(b.hash, 10)} <CopyButton text={b.hash} />
-                    </td>
-                    <td>
-                      <Link to={`/accounts/${b.miner}`}>{shortenHash(b.miner, 8)}</Link>
-                    </td>
-                    <td>{toRelativeTime(b.timestamp)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="row-end">
-              <Link to="/blocks">View all blocks</Link>
-            </div>
+              ))}
+            </tbody>
+          </table>
+          <div className="row-end">
+            <Link to="/blocks">VIEW ALL BLOCKS →</Link>
           </div>
+        </Section>
 
-          <div>
-            <h3>Recent Compute Tx</h3>
-            <table className="table compact">
-              <thead>
-                <tr>
-                  <th>Tx ID</th>
-                  <th>Status</th>
-                  <th>Age</th>
+        <Section title="Latest Transactions">
+          <table className="table compact">
+            <thead>
+              <tr>
+                <th>Tx ID</th>
+                <th>Status</th>
+                <th>Age</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentCompute?.items.slice(0, 6).map((x) => (
+                <tr key={x.tx_id}>
+                  <td>
+                    <Link to={`/compute/${x.tx_id}`}>{shortenHash(x.tx_id, 10)}</Link>
+                  </td>
+                  <td>
+                    <span className={x.success ? "ok" : "bad"}>{x.success ? "ok" : "failed"}</span>
+                  </td>
+                  <td>{toRelativeTime(x.seen_at_unix)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {recentCompute?.items.map((x) => (
-                  <tr key={x.tx_id}>
-                    <td>
-                      <Link to={`/compute/${x.tx_id}`}>{shortenHash(x.tx_id, 10)}</Link>
-                    </td>
-                    <td>
-                      <span className={x.success ? "ok" : "bad"}>{x.success ? "ok" : "failed"}</span>
-                    </td>
-                    <td>{toRelativeTime(x.seen_at_unix)}</td>
-                  </tr>
-                ))}
-                {!recentCompute?.items.length ? (
-                  <tr>
-                    <td colSpan={3} className="muted">
-                      No observed compute tx yet.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
+              ))}
+              {!recentCompute?.items.length ? (
+                <tr>
+                  <td colSpan={3} className="muted">
+                    No observed compute tx yet.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+          <div className="row-end">
+            <Link to="/search/tx">VIEW ALL TRANSACTIONS →</Link>
           </div>
-        </div>
-      </Section>
+        </Section>
+      </div>
 
       <Section title="Hot Addresses">
         <table className="table compact">
