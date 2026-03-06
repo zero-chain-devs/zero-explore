@@ -20,6 +20,11 @@ import {
 
 type ErrorCode = "rpc" | "not_found" | "bad_request" | "unknown";
 
+type StatHistoryPoint = {
+  ts: number;
+  block: number;
+};
+
 function classifyError(err: unknown): { code: ErrorCode; message: string } {
   if (err instanceof ApiClientError) {
     if (err.code === "rpc_error") return { code: "rpc", message: err.message };
@@ -153,6 +158,38 @@ function HeroSearch({ smartRedirect = false }: { smartRedirect?: boolean }) {
 }
 
 function HeroMetrics({ stats }: { stats: NetworkStats | null }) {
+  const [history, setHistory] = useState<StatHistoryPoint[]>([]);
+
+  useEffect(() => {
+    if (!stats?.latest_block_number) return;
+    const point: StatHistoryPoint = {
+      ts: Date.now(),
+      block: stats.latest_block_number,
+    };
+
+    setHistory((prev) => {
+      const next = [...prev, point];
+      return next.slice(-14);
+    });
+  }, [stats?.latest_block_number]);
+
+  const chartPath = useMemo(() => {
+    if (history.length <= 1) return "";
+    const values = history.map((x) => x.block);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = Math.max(1, max - min);
+    const width = 240;
+    const height = 56;
+    return history
+      .map((p, i) => {
+        const x = (i / (history.length - 1)) * width;
+        const y = height - ((p.block - min) / span) * height;
+        return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+      })
+      .join(" ");
+  }, [history]);
+
   return (
     <section className="hero-metrics">
       <div className="hero-metrics-grid">
@@ -169,8 +206,20 @@ function HeroMetrics({ stats }: { stats: NetworkStats | null }) {
           <div className="metric-value">{stats?.gas_price ?? "-"}</div>
         </div>
         <div className="metric-card">
-          <div className="metric-title">LAST FINALIZED BLOCK</div>
-          <div className="metric-value">{stats?.latest_block_number ?? "-"}</div>
+          <div className="metric-title">TRANSACTION HISTORY IN RECENT CHECKS</div>
+          <div className="mini-chart-wrap">
+            {chartPath ? (
+              <svg className="mini-chart" viewBox="0 0 240 56" preserveAspectRatio="none" aria-hidden="true">
+                <path d={chartPath} />
+              </svg>
+            ) : (
+              <div className="mini-chart-empty">collecting…</div>
+            )}
+          </div>
+          <div className="mini-chart-axis">
+            <span>{history.length > 0 ? toDate(Math.floor(history[0].ts / 1000)) : "-"}</span>
+            <span>{history.length > 0 ? toDate(Math.floor(history[history.length - 1].ts / 1000)) : "-"}</span>
+          </div>
         </div>
       </div>
     </section>
@@ -180,7 +229,7 @@ function HeroMetrics({ stats }: { stats: NetworkStats | null }) {
 function HomeBlockRows({ items }: { items: ExplorerBlock[] }) {
   return (
     <div className="list-rows">
-      {items.slice(0, 6).map((b) => (
+      {items.map((b) => (
         <div className="list-row" key={b.hash}>
           <div className="row-icon">◻</div>
           <div className="row-main">
@@ -205,7 +254,7 @@ function HomeBlockRows({ items }: { items: ExplorerBlock[] }) {
 function HomeTxRows({ items }: { items: RecentComputeItem[] }) {
   return (
     <div className="list-rows">
-      {items.slice(0, 6).map((x) => (
+      {items.map((x) => (
         <div className="list-row" key={x.tx_id}>
           <div className="row-icon">≣</div>
           <div className="row-main">
@@ -235,6 +284,8 @@ function HomePage() {
   const [cacheDebug, setCacheDebug] = useState<CacheDebugResponse | null>(null);
   const [error, setError] = useState("");
   const [errorCode, setErrorCode] = useState<ErrorCode>("unknown");
+  const [txWindow, setTxWindow] = useState<"latest" | "all">("latest");
+  const [blockWindow, setBlockWindow] = useState<"latest" | "all">("latest");
 
   useEffect(() => {
     let mounted = true;
@@ -282,9 +333,27 @@ function HomePage() {
         <article className="home-panel">
           <div className="home-panel-head">
             <h3>Latest Blocks</h3>
-            <button className="tiny-btn" type="button">Customize</button>
+            <div className="head-tools">
+              <div className="segment" role="tablist" aria-label="blocks window">
+                <button
+                  className={`segment-btn ${blockWindow === "latest" ? "active" : ""}`}
+                  type="button"
+                  onClick={() => setBlockWindow("latest")}
+                >
+                  Latest
+                </button>
+                <button
+                  className={`segment-btn ${blockWindow === "all" ? "active" : ""}`}
+                  type="button"
+                  onClick={() => setBlockWindow("all")}
+                >
+                  All
+                </button>
+              </div>
+              <button className="tiny-btn" type="button">Customize</button>
+            </div>
           </div>
-          <HomeBlockRows items={blocks?.items ?? []} />
+          <HomeBlockRows items={blockWindow === "latest" ? (blocks?.items ?? []).slice(0, 6) : (blocks?.items ?? [])} />
           <div className="row-end">
             <Link to="/blocks">VIEW ALL BLOCKS →</Link>
           </div>
@@ -293,9 +362,27 @@ function HomePage() {
         <article className="home-panel">
           <div className="home-panel-head">
             <h3>Latest Transactions</h3>
-            <button className="tiny-btn" type="button">Customize</button>
+            <div className="head-tools">
+              <div className="segment" role="tablist" aria-label="transactions window">
+                <button
+                  className={`segment-btn ${txWindow === "latest" ? "active" : ""}`}
+                  type="button"
+                  onClick={() => setTxWindow("latest")}
+                >
+                  Latest
+                </button>
+                <button
+                  className={`segment-btn ${txWindow === "all" ? "active" : ""}`}
+                  type="button"
+                  onClick={() => setTxWindow("all")}
+                >
+                  All
+                </button>
+              </div>
+              <button className="tiny-btn" type="button">Customize</button>
+            </div>
           </div>
-          <HomeTxRows items={recentCompute?.items ?? []} />
+          <HomeTxRows items={txWindow === "latest" ? (recentCompute?.items ?? []).slice(0, 6) : (recentCompute?.items ?? [])} />
           <div className="row-end">
             <Link to="/search/tx">VIEW ALL TRANSACTIONS →</Link>
           </div>

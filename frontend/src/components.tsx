@@ -31,11 +31,39 @@ export function Shell({
               <Link to="/">ZeroScan</Link>
             </div>
             <nav className="nav-links">
-              <Link to="/">Home</Link>
-              <Link to="/blocks">Blockchain</Link>
-              <Link to="/search/tx">Transactions</Link>
-              <Link to="/search/address">Addresses</Link>
-              <Link to="/search/domain">Domains</Link>
+              <div className="nav-item">
+                <Link to="/">Home</Link>
+              </div>
+              <div className="nav-item has-menu">
+                <Link to="/blocks">Blockchain ▾</Link>
+                <div className="nav-menu">
+                  <Link to="/blocks">View Blocks</Link>
+                  <Link to="/search/latest-block">Latest Block</Link>
+                  <Link to="/search/finalized">Finalized Block</Link>
+                </div>
+              </div>
+              <div className="nav-item has-menu">
+                <Link to="/search/tx">Transactions ▾</Link>
+                <div className="nav-menu">
+                  <Link to="/search/tx">Search Transactions</Link>
+                  <Link to="/compute/0x0">Compute Tx Viewer</Link>
+                </div>
+              </div>
+              <div className="nav-item has-menu">
+                <Link to="/search/address">Addresses ▾</Link>
+                <div className="nav-menu">
+                  <Link to="/search/address">Search Address</Link>
+                  <Link to="/accounts/0x0000000000000000000000000000000000000000">Zero Address</Link>
+                </div>
+              </div>
+              <div className="nav-item has-menu">
+                <Link to="/search/domain">Resources ▾</Link>
+                <div className="nav-menu">
+                  <Link to="/domains/0">Domain Lookup</Link>
+                  <Link to="/search/object">Object Lookup</Link>
+                  <Link to="/search/output">Output Lookup</Link>
+                </div>
+              </div>
             </nav>
             <div className="nav-right">
               <span className="lamp-wrap" title={lamp?.detail ?? "network status unknown"}>

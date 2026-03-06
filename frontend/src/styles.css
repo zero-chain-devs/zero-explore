@@ -93,6 +93,41 @@ a {
   gap: 17px;
 }
 
+.nav-item {
+  position: relative;
+}
+
+.nav-item.has-menu:hover .nav-menu {
+  display: flex;
+}
+
+.nav-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  display: none;
+  flex-direction: column;
+  min-width: 180px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
+  padding: 6px;
+  z-index: 25;
+}
+
+.nav-menu a {
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.nav-menu a:hover {
+  background: #f1f5f9;
+  color: var(--text-primary);
+}
+
 .nav-links a {
   color: #3f4a5a;
   font-size: 13px;
@@ -270,6 +305,46 @@ a {
   color: #dc2626;
 }
 
+.mini-chart-wrap {
+  margin-top: 6px;
+  width: 100%;
+  height: 56px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mini-chart {
+  width: 100%;
+  height: 100%;
+}
+
+.mini-chart path {
+  fill: none;
+  stroke: #6b7280;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mini-chart-empty {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.mini-chart-axis {
+  margin-top: 4px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
 .dashboard-panels {
   margin-top: 14px;
 }
@@ -336,6 +411,34 @@ a {
   justify-content: space-between;
   padding: 0 10px 0 12px;
   border-bottom: 1px solid var(--border);
+}
+
+.head-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.segment {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.segment-btn {
+  border: 0;
+  background: transparent;
+  font-size: 10px;
+  color: var(--muted);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.segment-btn.active {
+  background: #eef6fd;
+  color: #165f94;
 }
 
 .home-panel-head h3 {
@@ -660,6 +763,10 @@ a {
     padding-bottom: 4px;
   }
 
+  .nav-item.has-menu:hover .nav-menu {
+    display: none;
+  }
+
   .hero-search {
     grid-template-columns: 1fr;
   }
@@ -681,6 +788,14 @@ a {
 
   .hero-metrics-grid {
     grid-template-columns: 1fr;
+  }
+
+  .head-tools {
+    gap: 6px;
+  }
+
+  .segment {
+    display: none;
   }
 
   .metric-card {
