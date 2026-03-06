@@ -1,17 +1,19 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { ApiClientError, api } from "./api";
-import { CopyButton, HexOrEmpty, Section, Shell, StatCard, shortenHash } from "./components";
+import { CopyButton, HexOrEmpty, Section, Shell, shortenHash } from "./components";
 import {
   AccountOverview,
   BlockRangeResponse,
   BlockListResponse,
   CacheDebugResponse,
   ComputeTxResultView,
+  ExplorerBlock,
   HotAddressResponse,
   NetworkHealth,
   NetworkStats,
   ObjectOutputView,
+  RecentComputeItem,
   RecentComputeResponse,
   SearchResponse,
 } from "./types";
@@ -175,6 +177,56 @@ function HeroMetrics({ stats }: { stats: NetworkStats | null }) {
   );
 }
 
+function HomeBlockRows({ items }: { items: ExplorerBlock[] }) {
+  return (
+    <div className="list-rows">
+      {items.slice(0, 6).map((b) => (
+        <div className="list-row" key={b.hash}>
+          <div className="row-icon">◻</div>
+          <div className="row-main">
+            <div className="row-top">
+              <Link to={`/blocks/${b.number}`}>{b.number}</Link>
+            </div>
+            <div className="row-sub">{toRelativeTime(b.timestamp)}</div>
+          </div>
+          <div className="row-meta">
+            <div className="row-top">
+              Miner <Link to={`/accounts/${b.miner}`}>{shortenHash(b.miner, 10)}</Link>
+            </div>
+            <div className="row-sub">{b.tx_count} txns</div>
+          </div>
+          <div className="amount-pill">{b.difficulty}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function HomeTxRows({ items }: { items: RecentComputeItem[] }) {
+  return (
+    <div className="list-rows">
+      {items.slice(0, 6).map((x) => (
+        <div className="list-row" key={x.tx_id}>
+          <div className="row-icon">≣</div>
+          <div className="row-main">
+            <div className="row-top">
+              <Link to={`/compute/${x.tx_id}`}>{shortenHash(x.tx_id, 12)}</Link>
+            </div>
+            <div className="row-sub">{toRelativeTime(x.seen_at_unix)}</div>
+          </div>
+          <div className="row-meta">
+            <div className="row-top">
+              <span className={x.success ? "ok" : "bad"}>{x.success ? "Success" : "Failed"}</span>
+            </div>
+            <div className="row-sub">via zero_getComputeTxResult</div>
+          </div>
+          <div className="amount-pill">tx</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function HomePage() {
   const [stats, setStats] = useState<NetworkStats | null>(null);
   const [blocks, setBlocks] = useState<BlockListResponse | null>(null);
@@ -226,76 +278,22 @@ function HomePage() {
 
       <HeroMetrics stats={stats} />
 
-      <Section title="Network Snapshot">
-        <div className="grid4">
-          <StatCard title="Chain ID" value={stats?.chain_id ?? "-"} />
-          <StatCard title="Network ID" value={stats?.network_id ?? "-"} />
-          <StatCard title="Mining" value={stats?.mining ? "ON" : "OFF"} />
-          <StatCard title="Latest Time" value={toDate(stats?.latest_block_timestamp)} />
-        </div>
-      </Section>
-
       <div className="split2 dashboard-panels">
         <Section title="Latest Blocks">
-          <table className="table compact">
-            <thead>
-              <tr>
-                <th>Height</th>
-                <th>Miner</th>
-                <th>Txns</th>
-                <th>Age</th>
-              </tr>
-            </thead>
-            <tbody>
-              {blocks?.items.slice(0, 6).map((b) => (
-                <tr key={b.hash}>
-                  <td>
-                    <Link to={`/blocks/${b.number}`}>{b.number}</Link>
-                  </td>
-                  <td>
-                    <Link to={`/accounts/${b.miner}`}>{shortenHash(b.miner, 8)}</Link>
-                  </td>
-                  <td>{b.tx_count}</td>
-                  <td>{toRelativeTime(b.timestamp)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="panel-head-end">
+            <button className="tiny-btn" type="button">Customize</button>
+          </div>
+          <HomeBlockRows items={blocks?.items ?? []} />
           <div className="row-end">
             <Link to="/blocks">VIEW ALL BLOCKS →</Link>
           </div>
         </Section>
 
         <Section title="Latest Transactions">
-          <table className="table compact">
-            <thead>
-              <tr>
-                <th>Tx ID</th>
-                <th>Status</th>
-                <th>Age</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentCompute?.items.slice(0, 6).map((x) => (
-                <tr key={x.tx_id}>
-                  <td>
-                    <Link to={`/compute/${x.tx_id}`}>{shortenHash(x.tx_id, 10)}</Link>
-                  </td>
-                  <td>
-                    <span className={x.success ? "ok" : "bad"}>{x.success ? "ok" : "failed"}</span>
-                  </td>
-                  <td>{toRelativeTime(x.seen_at_unix)}</td>
-                </tr>
-              ))}
-              {!recentCompute?.items.length ? (
-                <tr>
-                  <td colSpan={3} className="muted">
-                    No observed compute tx yet.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+          <div className="panel-head-end">
+            <button className="tiny-btn" type="button">Customize</button>
+          </div>
+          <HomeTxRows items={recentCompute?.items ?? []} />
           <div className="row-end">
             <Link to="/search/tx">VIEW ALL TRANSACTIONS →</Link>
           </div>
