@@ -41,6 +41,8 @@
   - domain id
 
 > 说明：后端优先使用 ZeroChain 原生能力（`zero_*`），同时兼容可用的 `eth_*` 基础信息（如 `eth_blockNumber`/`eth_chainId`）。
+>
+> 地址格式建议：原生地址使用 `ZER0x` + 40 hex（checksum）；EVM 地址保持 `0x...`。
 
 ## 启动
 

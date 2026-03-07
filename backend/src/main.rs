@@ -535,18 +535,18 @@ async fn get_account_overview(
     State(state): State<AppState>,
     Path(address): Path<String>,
 ) -> Result<Json<AccountOverview>, ApiError> {
-    if !is_eth_address(&address) {
+    let Some(normalized_address) = normalize_supported_address(&address) else {
         return Err(ApiError {
             code: "bad_request",
             message: format!("invalid address: {address}"),
         });
-    }
+    };
 
     let balance_hex: String = rpc_call_str(
         &state,
         "eth_getBalance",
         vec![
-            Value::String(address.clone()),
+            Value::String(normalized_address.clone()),
             Value::String("latest".to_string()),
         ],
     )
@@ -556,7 +556,7 @@ async fn get_account_overview(
         &state,
         "eth_getTransactionCount",
         vec![
-            Value::String(address.clone()),
+            Value::String(normalized_address.clone()),
             Value::String("latest".to_string()),
         ],
     )
@@ -565,7 +565,7 @@ async fn get_account_overview(
     let account_val = rpc_call_value(
         &state,
         "zero_getAccount",
-        vec![Value::String(address.clone())],
+        vec![Value::String(normalized_address.clone())],
     )
     .await
     .unwrap_or(Value::Null);
@@ -573,15 +573,15 @@ async fn get_account_overview(
     let utxos = rpc_call_value(
         &state,
         "zero_getUtxos",
-        vec![Value::String(address.clone())],
+        vec![Value::String(normalized_address.clone())],
     )
     .await
     .unwrap_or(Value::Array(vec![]));
 
-    record_address_hit(&state, &address).await;
+    record_address_hit(&state, &normalized_address).await;
 
     Ok(Json(AccountOverview {
-        address,
+        address: normalized_address,
         balance_hex: account_val
             .get("balance")
             .and_then(Value::as_str)
@@ -805,12 +805,13 @@ async fn search(
         }
     }
 
-    if is_eth_address(&query) {
-        let account = get_account_overview(State(state.clone()), Path(query.clone())).await?;
+    if let Some(normalized_address) = normalize_supported_address(&query) {
+        let account =
+            get_account_overview(State(state.clone()), Path(normalized_address.clone())).await?;
         return Ok(Json(SearchResponse {
             kind: "address".to_string(),
-            primary_id: query.clone(),
-            canonical_route: format!("/accounts/{query}"),
+            primary_id: normalized_address.clone(),
+            canonical_route: format!("/accounts/{normalized_address}"),
             value: serde_json::to_value(account.0).unwrap_or(Value::Null),
         }));
     }
@@ -959,23 +960,23 @@ async fn record_compute_observation(state: &AppState, tx_id: &str, success: bool
 }
 
 async fn record_address_hit(state: &AppState, address: &str) {
-    if !is_eth_address(address) {
+    let Some(normalized_address) = normalize_supported_address(address) else {
         return;
-    }
+    };
     {
         let mut guard = state.activity.write().await;
         let now = current_unix_secs();
         let entry = guard
             .hot_addresses
-            .entry(address.to_ascii_lowercase())
+            .entry(normalized_address.to_ascii_lowercase())
             .or_insert(HotAddressItem {
-                address: address.to_string(),
+                address: normalized_address.clone(),
                 hits: 0,
                 last_seen_unix: now,
             });
         entry.hits = entry.hits.saturating_add(1);
         entry.last_seen_unix = now;
-        entry.address = address.to_string();
+        entry.address = normalized_address;
     }
     let _ = persist_activity(state).await;
 }
@@ -1131,10 +1132,25 @@ fn parse_eth_block(v: &Value) -> Option<ExplorerBlock> {
     })
 }
 
-fn is_eth_address(value: &str) -> bool {
-    value.starts_with("0x")
-        && value.len() == 42
-        && value[2..].chars().all(|c| c.is_ascii_hexdigit())
+fn normalize_supported_address(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+
+    if trimmed.starts_with("0x")
+        && trimmed.len() == 42
+        && trimmed[2..].chars().all(|c| c.is_ascii_hexdigit())
+    {
+        return Some(trimmed.to_string());
+    }
+
+    if trimmed.len() == 45 {
+        let prefix = trimmed.get(..5)?;
+        let body = trimmed.get(5..)?;
+        if prefix.eq_ignore_ascii_case("ZER0x") && body.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Some(format!("ZER0x{body}"));
+        }
+    }
+
+    None
 }
 
 fn is_hex_32(value: &str) -> bool {
