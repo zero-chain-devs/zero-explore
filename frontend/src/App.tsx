@@ -51,11 +51,21 @@ function toRelativeTime(timestamp?: number | null): string {
 }
 
 function isAddressLike(value: string): boolean {
-  return value.startsWith("0x") && value.length === 42;
+  return (
+    value.startsWith("ZER0x") &&
+    value.length === 45 &&
+    [...value.slice(5)].every((c) => /[0-9a-fA-F]/.test(c))
+  );
 }
 
 function isHashLike(value: string): boolean {
   return value.startsWith("0x") && value.length === 66;
+}
+
+function isCopyableHexValue(value: string): boolean {
+  if (isAddressLike(value)) return true;
+  if (!value.startsWith("0x")) return false;
+  return value.length > 2 && [...value.slice(2)].every((c) => /[0-9a-fA-F]/.test(c));
 }
 
 function normalizeFieldValue(value: unknown): string {
@@ -84,7 +94,7 @@ function KeyValueGrid({ data }: { data: Record<string, unknown> }) {
           </div>
           <div className="v">
             {normalizeFieldValue(v)}
-            {typeof v === "string" && v.startsWith("0x") ? <CopyButton text={v} /> : null}
+            {typeof v === "string" && isCopyableHexValue(v) ? <CopyButton text={v} /> : null}
           </div>
         </Fragment>
       ))}

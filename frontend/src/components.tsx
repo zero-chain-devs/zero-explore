@@ -53,7 +53,7 @@ export function Shell({
                 <Link to="/search/address">Addresses ▾</Link>
                 <div className="nav-menu">
                   <Link to="/search/address">Search Address</Link>
-                  <Link to="/accounts/0x0000000000000000000000000000000000000000">Zero Address</Link>
+                  <Link to="/accounts/ZER0x0000000000000000000000000000000000000000">Zero Address</Link>
                 </div>
               </div>
               <div className="nav-item has-menu">

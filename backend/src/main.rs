@@ -367,8 +367,8 @@ async fn network_stats(State(state): State<AppState>) -> Result<Json<NetworkStat
     let coinbase = latest_zero_block
         .get("coinbase")
         .and_then(Value::as_str)
-        .unwrap_or("ZER0x0000000000000000000000000000000000000000")
-        .to_string();
+        .and_then(canonicalize_observed_address)
+        .unwrap_or_else(|| "ZER0x0000000000000000000000000000000000000000".to_string());
 
     let stats = NetworkStats {
         chain_id,
@@ -899,8 +899,12 @@ async fn sync_background_activity_once(state: &AppState) -> Result<(), ApiError>
     let latest = rpc_call_value(state, "zero_getLatestBlock", vec![])
         .await
         .unwrap_or(Value::Null);
-    if let Some(coinbase) = latest.get("coinbase").and_then(Value::as_str) {
-        record_address_hit(state, coinbase).await;
+    if let Some(coinbase) = latest
+        .get("coinbase")
+        .and_then(Value::as_str)
+        .and_then(canonicalize_observed_address)
+    {
+        record_address_hit(state, &coinbase).await;
     }
 
     Ok(())
@@ -1056,8 +1060,8 @@ fn parse_zero_block(v: &Value) -> Option<ExplorerBlock> {
         miner: v
             .get("coinbase")
             .and_then(Value::as_str)
-            .unwrap_or("0x0000000000000000000000000000000000000000")
-            .to_string(),
+            .and_then(canonicalize_observed_address)
+            .unwrap_or_else(|| "ZER0x0000000000000000000000000000000000000000".to_string()),
         tx_count: 0,
         extra_data: v
             .get("extra_data")
@@ -1077,20 +1081,28 @@ async fn latest_block_number(state: &AppState) -> Result<u64, ApiError> {
 
 fn normalize_supported_address(value: &str) -> Option<String> {
     let trimmed = value.trim();
+    if trimmed.len() != 45 {
+        return None;
+    }
+    let prefix = trimmed.get(..5)?;
+    let body = trimmed.get(5..)?;
+    if prefix.eq_ignore_ascii_case("ZER0x") && body.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Some(format!("ZER0x{body}"));
+    }
+    None
+}
 
+fn canonicalize_observed_address(value: &str) -> Option<String> {
+    if let Some(normalized) = normalize_supported_address(value) {
+        return Some(normalized);
+    }
+
+    let trimmed = value.trim();
     if trimmed.starts_with("0x")
         && trimmed.len() == 42
         && trimmed[2..].chars().all(|c| c.is_ascii_hexdigit())
     {
-        return Some(trimmed.to_string());
-    }
-
-    if trimmed.len() == 45 {
-        let prefix = trimmed.get(..5)?;
-        let body = trimmed.get(5..)?;
-        if prefix.eq_ignore_ascii_case("ZER0x") && body.chars().all(|c| c.is_ascii_hexdigit()) {
-            return Some(format!("ZER0x{body}"));
-        }
+        return Some(format!("ZER0x{}", &trimmed[2..]));
     }
 
     None
