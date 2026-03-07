@@ -1,6 +1,7 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { ApiClientError, api } from "./api";
+import { usePolling } from "./hooks/usePolling";
 import { CopyButton, HexOrEmpty, Section, Shell, shortenHash } from "./components";
 import {
   AccountOverview,
@@ -77,15 +78,15 @@ function KeyValueGrid({ data }: { data: Record<string, unknown> }) {
   return (
     <div className="detail-grid">
       {Object.entries(data).map(([k, v]) => (
-        <>
-          <div className="k" key={`k-${k}`}>
+        <Fragment key={k}>
+          <div className="k">
             {k}
           </div>
-          <div className="v" key={`v-${k}`}>
+          <div className="v">
             {normalizeFieldValue(v)}
             {typeof v === "string" && v.startsWith("0x") ? <CopyButton text={v} /> : null}
           </div>
-        </>
+        </Fragment>
       ))}
     </div>
   );
@@ -286,41 +287,37 @@ function HomePage() {
   const [errorCode, setErrorCode] = useState<ErrorCode>("unknown");
   const [txWindow, setTxWindow] = useState<"latest" | "all">("latest");
   const [blockWindow, setBlockWindow] = useState<"latest" | "all">("latest");
+  const aliveRef = useRef(true);
 
   useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        const [s, b, c, h, d] = await Promise.all([
-          api.networkStats(),
-          api.blocks(10, 1),
-          api.recentCompute(10),
-          api.hotAddresses(10),
-          api.debugCache(),
-        ]);
-        if (!mounted) return;
-        setStats(s);
-        setBlocks(b);
-        setRecentCompute(c);
-        setHotAddresses(h);
-        setCacheDebug(d);
-      } catch (e) {
-        if (!mounted) return;
-        const classified = classifyError(e);
-        setError(classified.message);
-        setErrorCode(classified.code);
-      }
-    };
-
-    void load();
-    const timer = setInterval(() => {
-      void load();
-    }, 5000);
     return () => {
-      mounted = false;
-      clearInterval(timer);
+      aliveRef.current = false;
     };
   }, []);
+
+  usePolling(async () => {
+    try {
+      const [s, b, c, h, d] = await Promise.all([
+        api.networkStats(),
+        api.blocks(10, 1),
+        api.recentCompute(10),
+        api.hotAddresses(10),
+        api.debugCache(),
+      ]);
+      if (!aliveRef.current) return;
+      setStats(s);
+      setBlocks(b);
+      setRecentCompute(c);
+      setHotAddresses(h);
+      setCacheDebug(d);
+      setError("");
+    } catch (e) {
+      if (!aliveRef.current) return;
+      const classified = classifyError(e);
+      setError(classified.message);
+      setErrorCode(classified.code);
+    }
+  }, 5000);
 
   return (
     <>
@@ -726,14 +723,14 @@ function ObjectPage() {
             {valueObj.length ? (
               <div className="detail-grid mt12">
                 {valueObj.map(([k, v]) => (
-                  <>
-                    <div className="k" key={`ok-${k}`}>
+                  <Fragment key={k}>
+                    <div className="k">
                       {k}
                     </div>
-                    <div className="v" key={`ov-${k}`}>
+                    <div className="v">
                       {normalizeFieldValue(v)}
                     </div>
-                  </>
+                  </Fragment>
                 ))}
               </div>
             ) : null}
@@ -775,14 +772,14 @@ function OutputPage() {
             {valueObj.length ? (
               <div className="detail-grid mt12">
                 {valueObj.map(([k, v]) => (
-                  <>
-                    <div className="k" key={`pk-${k}`}>
+                  <Fragment key={k}>
+                    <div className="k">
                       {k}
                     </div>
-                    <div className="v" key={`pv-${k}`}>
+                    <div className="v">
                       {normalizeFieldValue(v)}
                     </div>
-                  </>
+                  </Fragment>
                 ))}
               </div>
             ) : null}
@@ -942,35 +939,30 @@ function SearchBar({ defaultValue, smartRedirect = false }: { defaultValue?: str
 
 export function App() {
   const [health, setHealth] = useState<NetworkHealth | null>(null);
+  const aliveRef = useRef(true);
 
   useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        const h = await api.networkHealth();
-        if (!mounted) return;
-        setHealth(h);
-      } catch {
-        if (!mounted) return;
-        setHealth({
-          backend_ok: true,
-          rpc_ok: false,
-          rpc_latency_ms: 0,
-          checked_at_unix: 0,
-          detail: "health check failed",
-        });
-      }
-    };
-
-    void load();
-    const timer = setInterval(() => {
-      void load();
-    }, 5000);
     return () => {
-      mounted = false;
-      clearInterval(timer);
+      aliveRef.current = false;
     };
   }, []);
+
+  usePolling(async () => {
+    try {
+      const h = await api.networkHealth();
+      if (!aliveRef.current) return;
+      setHealth(h);
+    } catch {
+      if (!aliveRef.current) return;
+      setHealth({
+        backend_ok: true,
+        rpc_ok: false,
+        rpc_latency_ms: 0,
+        checked_at_unix: 0,
+        detail: "health check failed",
+      });
+    }
+  }, 5000);
 
   const lampDetail = health
     ? `rpc_ok=${health.rpc_ok}; latency=${health.rpc_latency_ms}ms; checked=${toDate(health.checked_at_unix)}; detail=${health.detail}`

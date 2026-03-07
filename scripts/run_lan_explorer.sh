@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+FRONTEND_DIR="$ROOT_DIR/frontend"
+BACKEND_DIR="$ROOT_DIR/backend"
+
+RPC_URL="${ZERO_RPC_URL:-http://127.0.0.1:19545}"
+BIND_ADDR="${ZERO_EXPLORER_BACKEND_BIND:-0.0.0.0:19080}"
+FRONTEND_DIST="${ZERO_EXPLORER_FRONTEND_DIST:-$FRONTEND_DIR/dist}"
+
+cd "$FRONTEND_DIR"
+npm run build
+
+cd "$BACKEND_DIR"
+ZERO_RPC_URL="$RPC_URL" \
+ZERO_EXPLORER_BACKEND_BIND="$BIND_ADDR" \
+ZERO_EXPLORER_FRONTEND_DIST="$FRONTEND_DIST" \
+cargo run --release

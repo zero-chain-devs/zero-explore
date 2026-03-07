@@ -19,7 +19,11 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::sync::RwLock;
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tower_http::{
+    cors::CorsLayer,
+    services::{ServeDir, ServeFile},
+    trace::TraceLayer,
+};
 use tracing::{error, info, warn};
 
 const CACHE_TTL_SECS: u64 = 5;
@@ -237,6 +241,8 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|_| "127.0.0.1:18080".to_string());
     let state_file = std::env::var("ZERO_EXPLORER_STATE_FILE")
         .unwrap_or_else(|_| "./data/explorer-state.json".to_string());
+    let frontend_dist = std::env::var("ZERO_EXPLORER_FRONTEND_DIST")
+        .unwrap_or_else(|_| "../frontend/dist".to_string());
     let addr: SocketAddr = bind
         .parse()
         .with_context(|| format!("invalid bind address: {bind}"))?;
@@ -255,6 +261,9 @@ async fn main() -> Result<()> {
 
     spawn_background_activity_sync(state.clone());
 
+    let frontend_index = PathBuf::from(&frontend_dist).join("index.html");
+    let static_service = ServeDir::new(&frontend_dist).not_found_service(ServeFile::new(frontend_index));
+
     let app = Router::new()
         .route("/health", get(health))
         .route("/api/network/health", get(network_health))
@@ -272,12 +281,13 @@ async fn main() -> Result<()> {
         .route("/api/domains/:domain_id", get(get_domain_view))
         .route("/api/search/:query", get(search))
         .route("/api/debug/cache", get(debug_cache))
+        .fallback_service(static_service)
         .with_state(state)
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    info!(bind = %addr, "zero explorer backend listening");
+    info!(bind = %addr, frontend_dist = %frontend_dist, "zero explorer backend listening");
     axum::serve(listener, app).await?;
     Ok(())
 }
