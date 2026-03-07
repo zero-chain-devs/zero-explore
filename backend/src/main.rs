@@ -308,7 +308,7 @@ async fn health() -> Json<Value> {
 
 async fn network_health(State(state): State<AppState>) -> Json<NetworkHealth> {
     let started = Instant::now();
-    let probe = rpc_call_value(&state, "eth_blockNumber", vec![]).await;
+    let probe = rpc_call_value(&state, "zero_getLatestBlock", vec![]).await;
     let latency = started.elapsed().as_millis();
 
     match probe {
@@ -340,18 +340,25 @@ async fn network_stats(State(state): State<AppState>) -> Result<Json<NetworkStat
         return Ok(Json(cached));
     }
 
-    let chain_id: String = rpc_call_str(&state, "eth_chainId", vec![]).await?;
     let network_id: String = rpc_call_str(&state, "net_version", vec![]).await?;
-    let block_hex: String = rpc_call_str(&state, "eth_blockNumber", vec![]).await?;
-    let latest_block_number = parse_u64_hex(&block_hex).unwrap_or(0);
-    let mining: bool = rpc_call_bool(&state, "eth_mining", vec![]).await?;
-    let hashrate: String = rpc_call_str(&state, "eth_hashrate", vec![]).await?;
-    let gas_price: String = rpc_call_str(&state, "eth_gasPrice", vec![]).await?;
-    let coinbase: String = rpc_call_str(&state, "eth_coinbase", vec![]).await?;
+    let chain_id = network_id.clone();
 
     let latest_zero_block = rpc_call_value(&state, "zero_getLatestBlock", vec![])
         .await
         .unwrap_or(Value::Null);
+    let latest_block_number = latest_zero_block
+        .get("number")
+        .and_then(Value::as_str)
+        .and_then(parse_u64_hex)
+        .unwrap_or(0);
+    let mining = rpc_call_value(&state, "zero_getWork", vec![]).await.is_ok();
+    let hashrate = "0x0".to_string();
+    let gas_price = "0x0".to_string();
+    let coinbase = latest_zero_block
+        .get("coinbase")
+        .and_then(Value::as_str)
+        .unwrap_or("ZER0x0000000000000000000000000000000000000000")
+        .to_string();
 
     let stats = NetworkStats {
         chain_id,
@@ -397,8 +404,7 @@ async fn list_blocks(
         return Ok(Json(cached));
     }
 
-    let latest_hex: String = rpc_call_str(&state, "eth_blockNumber", vec![]).await?;
-    let latest_num = parse_u64_hex(&latest_hex).unwrap_or(0);
+    let latest_num = latest_block_number(&state).await?;
     let skip = (page.saturating_sub(1)).saturating_mul(limit) as u64;
     let has_more = latest_num > skip;
 
@@ -443,8 +449,7 @@ async fn list_blocks_range(
 ) -> Result<Json<BlockRangeResponse>, ApiError> {
     let limit = query.limit.unwrap_or(50).clamp(1, 500);
 
-    let latest_num =
-        parse_u64_hex(&rpc_call_str(&state, "eth_blockNumber", vec![]).await?).unwrap_or(0);
+    let latest_num = latest_block_number(&state).await?;
 
     let to = query.to.unwrap_or(latest_num).min(latest_num);
     let from = query
@@ -502,27 +507,10 @@ async fn get_block_by_number(
     let number_hex = normalize_number_param(&number)?;
     let req_num = parse_u64_hex(&number_hex).unwrap_or(0);
 
-    let block = rpc_call_value(
-        &state,
-        "eth_getBlockByNumber",
-        vec![Value::String(number_hex), Value::Bool(true)],
-    )
-    .await
-    .unwrap_or(Value::Null);
-
-    if !block.is_null() {
+    if let Some(block) = fetch_block_by_number_best_effort(&state, req_num).await {
         return Ok(Json(
-            json!({ "source": "eth_getBlockByNumber", "block": block }),
+            json!({ "source": "zero_getLatestBlock", "block": block }),
         ));
-    }
-
-    let latest = rpc_call_value(&state, "zero_getLatestBlock", vec![]).await?;
-    if let Some(parsed) = parse_zero_block(&latest) {
-        if parsed.number == req_num {
-            return Ok(Json(
-                json!({ "source": "zero_getLatestBlock", "block": parsed }),
-            ));
-        }
     }
 
     Err(ApiError {
@@ -541,26 +529,6 @@ async fn get_account_overview(
             message: format!("invalid address: {address}"),
         });
     };
-
-    let balance_hex: String = rpc_call_str(
-        &state,
-        "eth_getBalance",
-        vec![
-            Value::String(normalized_address.clone()),
-            Value::String("latest".to_string()),
-        ],
-    )
-    .await?;
-
-    let nonce_hex: String = rpc_call_str(
-        &state,
-        "eth_getTransactionCount",
-        vec![
-            Value::String(normalized_address.clone()),
-            Value::String("latest".to_string()),
-        ],
-    )
-    .await?;
 
     let account_val = rpc_call_value(
         &state,
@@ -585,14 +553,18 @@ async fn get_account_overview(
         balance_hex: account_val
             .get("balance")
             .and_then(Value::as_str)
-            .unwrap_or(balance_hex.as_str())
+            .unwrap_or("0x0")
             .to_string(),
         nonce_hex: account_val
             .get("nonce")
             .and_then(Value::as_str)
-            .unwrap_or(nonce_hex.as_str())
+            .unwrap_or("0x0")
             .to_string(),
-        tx_count_hex: nonce_hex,
+        tx_count_hex: account_val
+            .get("nonce")
+            .and_then(Value::as_str)
+            .unwrap_or("0x0")
+            .to_string(),
         utxos,
     }))
 }
@@ -907,33 +879,24 @@ async fn debug_cache(State(state): State<AppState>) -> Json<CacheDebugResponse> 
 }
 
 async fn sync_background_activity_once(state: &AppState) -> Result<(), ApiError> {
-    let latest_hex = rpc_call_str(state, "eth_blockNumber", vec![]).await?;
-    let latest_num = parse_u64_hex(&latest_hex).unwrap_or(0);
+    let latest_num = latest_block_number(state).await?;
     for n in latest_num.saturating_sub(2)..=latest_num {
         if let Some(block) = fetch_block_by_number_best_effort(state, n).await {
             record_address_hit(state, &block.miner).await;
         }
     }
 
-    let coinbase = rpc_call_str(state, "eth_coinbase", vec![]).await?;
-    record_address_hit(state, &coinbase).await;
+    let latest = rpc_call_value(state, "zero_getLatestBlock", vec![])
+        .await
+        .unwrap_or(Value::Null);
+    if let Some(coinbase) = latest.get("coinbase").and_then(Value::as_str) {
+        record_address_hit(state, coinbase).await;
+    }
 
     Ok(())
 }
 
 async fn fetch_block_by_number_best_effort(state: &AppState, number: u64) -> Option<ExplorerBlock> {
-    let n_hex = format!("0x{number:x}");
-    let block_val = rpc_call_value(
-        state,
-        "eth_getBlockByNumber",
-        vec![Value::String(n_hex), Value::Bool(true)],
-    )
-    .await
-    .unwrap_or(Value::Null);
-    if let Some(parsed) = parse_eth_block(&block_val) {
-        return Some(parsed);
-    }
-
     let latest = rpc_call_value(state, "zero_getLatestBlock", vec![])
         .await
         .unwrap_or(Value::Null);
@@ -1093,43 +1056,13 @@ fn parse_zero_block(v: &Value) -> Option<ExplorerBlock> {
     })
 }
 
-fn parse_eth_block(v: &Value) -> Option<ExplorerBlock> {
-    if v.is_null() {
-        return None;
-    }
-    let number_hex = v.get("number")?.as_str()?.to_string();
-    let number = parse_u64_hex(&number_hex)?;
-    Some(ExplorerBlock {
-        number,
-        number_hex,
-        hash: v.get("hash")?.as_str()?.to_string(),
-        parent_hash: v.get("parentHash")?.as_str()?.to_string(),
-        timestamp: parse_u64_hex(v.get("timestamp")?.as_str()?)?,
-        difficulty: v
-            .get("difficulty")
-            .and_then(Value::as_str)
-            .unwrap_or("0x0")
-            .to_string(),
-        nonce: v
-            .get("nonce")
-            .and_then(Value::as_str)
-            .and_then(parse_u64_hex)
-            .unwrap_or(0),
-        miner: v
-            .get("miner")
-            .and_then(Value::as_str)
-            .unwrap_or("0x0000000000000000000000000000000000000000")
-            .to_string(),
-        tx_count: v
-            .get("transactions")
-            .and_then(Value::as_array)
-            .map(|arr| arr.len())
-            .unwrap_or(0),
-        extra_data: v
-            .get("extraData")
-            .and_then(Value::as_str)
-            .map(ToString::to_string),
-    })
+async fn latest_block_number(state: &AppState) -> Result<u64, ApiError> {
+    let latest = rpc_call_value(state, "zero_getLatestBlock", vec![]).await?;
+    Ok(latest
+        .get("number")
+        .and_then(Value::as_str)
+        .and_then(parse_u64_hex)
+        .unwrap_or(0))
 }
 
 fn normalize_supported_address(value: &str) -> Option<String> {
@@ -1172,18 +1105,6 @@ async fn rpc_call_str(
             code: "rpc_error",
             message: format!("rpc {method} returned non-string result"),
         })
-}
-
-async fn rpc_call_bool(
-    state: &AppState,
-    method: &str,
-    params: Vec<Value>,
-) -> Result<bool, ApiError> {
-    let value = rpc_call_value(state, method, params).await?;
-    value.as_bool().ok_or_else(|| ApiError {
-        code: "rpc_error",
-        message: format!("rpc {method} returned non-bool result"),
-    })
 }
 
 async fn rpc_call_value(
