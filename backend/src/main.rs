@@ -480,7 +480,7 @@ async fn list_blocks(
     let skip = (page.saturating_sub(1)).saturating_mul(limit) as u64;
     let to = latest_num.saturating_sub(skip);
     let from = to.saturating_sub((limit as u64).saturating_sub(1));
-    let items = fetch_blocks_range_best_effort(&state, from, to, limit).await;
+    let items = fetch_blocks_range_best_effort(&state, from, to, limit).await?;
     for block in &items {
         record_address_hit(&state, &block.miner).await;
     }
@@ -533,7 +533,7 @@ async fn list_blocks_range(
         return Ok(Json(cached));
     }
 
-    let items = fetch_blocks_range_best_effort(&state, from, to, limit).await;
+    let items = fetch_blocks_range_best_effort(&state, from, to, limit).await?;
 
     let resp = BlockRangeResponse { from, to, items };
 
@@ -562,7 +562,7 @@ async fn get_block_by_number(
     let number_hex = normalize_number_param(&number)?;
     let req_num = parse_u64_hex(&number_hex).unwrap_or(0);
 
-    if let Some(block) = fetch_block_by_number_best_effort(&state, req_num).await {
+    if let Some(block) = fetch_block_by_number_best_effort(&state, req_num).await? {
         return Ok(Json(
             json!({ "source": "zero_getLatestBlock", "block": block }),
         ));
@@ -640,7 +640,7 @@ async fn list_account_blocks(
     let lookback = 5_000usize;
 
     let latest = latest_block_number(&state).await?;
-    let window = fetch_blocks_window(&state, latest, lookback).await;
+    let window = fetch_blocks_window(&state, latest, lookback).await?;
     let mined: Vec<ExplorerBlock> = window.into_iter().filter(|b| b.miner == address).collect();
 
     let start = (page.saturating_sub(1)).saturating_mul(limit);
@@ -690,7 +690,7 @@ async fn get_overview(State(state): State<AppState>) -> Result<Json<OverviewResp
     let stats = network_stats(State(state.clone())).await?.0;
     let latest = stats.latest_block_number;
     let lookback = latest.saturating_add(1).min(2_000) as usize;
-    let blocks = fetch_blocks_window(&state, latest, lookback).await;
+    let blocks = fetch_blocks_window(&state, latest, lookback).await?;
     let miner_items = aggregate_miner_stats(&blocks);
 
     let mut timestamps: Vec<u64> = blocks.iter().map(|b| b.timestamp).collect();
@@ -743,7 +743,7 @@ async fn list_miners(
     let lookback = query.lookback.unwrap_or(2_000).clamp(10, 20_000);
     let response_limit = query.limit.unwrap_or(100).clamp(1, 500);
 
-    let blocks = fetch_blocks_window(&state, latest, lookback).await;
+    let blocks = fetch_blocks_window(&state, latest, lookback).await?;
     let all_items = aggregate_miner_stats(&blocks);
     let unique_miners = all_items.len();
     let mut items = all_items;
@@ -772,7 +772,7 @@ async fn get_miner_detail(
     let limit = query.limit.unwrap_or(20).clamp(1, 200);
     let lookback = 5_000usize;
     let latest = latest_block_number(&state).await?;
-    let blocks = fetch_blocks_window(&state, latest, lookback).await;
+    let blocks = fetch_blocks_window(&state, latest, lookback).await?;
     let miner_blocks: Vec<ExplorerBlock> = blocks.into_iter().filter(|b| b.miner == address).collect();
     if miner_blocks.is_empty() {
         return Err(ApiError {
@@ -823,7 +823,7 @@ async fn list_recent_txs(
 ) -> Result<Json<Value>, ApiError> {
     let page = query.page.unwrap_or(1).max(1);
     let limit = query.limit.unwrap_or(20).clamp(1, 200);
-    let primary = rpc_call_value(
+    let result = rpc_call_value(
         &state,
         "zero_listTransactions",
         vec![json!({
@@ -832,19 +832,7 @@ async fn list_recent_txs(
             "kind": "all",
         })],
     )
-    .await;
-    let result = match primary {
-        Ok(v) => v,
-        Err(_) => rpc_call_value(
-            &state,
-            "zero_listComputeTxResults",
-            vec![json!({
-                "page": page,
-                "limit": limit,
-            })],
-        )
-        .await?,
-    };
+    .await?;
     Ok(Json(result))
 }
 
@@ -1043,7 +1031,7 @@ async fn search(
     Path(query): Path<String>,
 ) -> Result<Json<SearchResponse>, ApiError> {
     if let Ok(n) = query.parse::<u64>() {
-        if let Some(block) = fetch_block_by_number_best_effort(&state, n).await {
+        if let Some(block) = fetch_block_by_number_best_effort(&state, n).await? {
             return Ok(Json(SearchResponse {
                 kind: "block".to_string(),
                 primary_id: n.to_string(),
@@ -1185,14 +1173,12 @@ async fn debug_cache(State(state): State<AppState>) -> Json<CacheDebugResponse> 
 async fn sync_background_activity_once(state: &AppState) -> Result<(), ApiError> {
     let latest_num = latest_block_number(state).await?;
     for n in latest_num.saturating_sub(2)..=latest_num {
-        if let Some(block) = fetch_block_by_number_best_effort(state, n).await {
+        if let Some(block) = fetch_block_by_number_best_effort(state, n).await? {
             record_address_hit(state, &block.miner).await;
         }
     }
 
-    let latest = rpc_call_value(state, "zero_getLatestBlock", vec![])
-        .await
-        .unwrap_or(Value::Null);
+    let latest = rpc_call_value(state, "zero_getLatestBlock", vec![]).await?;
     if let Some(coinbase) = latest
         .get("coinbase")
         .and_then(Value::as_str)
@@ -1204,26 +1190,18 @@ async fn sync_background_activity_once(state: &AppState) -> Result<(), ApiError>
     Ok(())
 }
 
-async fn fetch_block_by_number_best_effort(state: &AppState, number: u64) -> Option<ExplorerBlock> {
+async fn fetch_block_by_number_best_effort(
+    state: &AppState,
+    number: u64,
+) -> Result<Option<ExplorerBlock>, ApiError> {
     let number_hex = format!("0x{number:x}");
-    let value = match rpc_call_value(
+    let value = rpc_call_value(
         state,
         "zero_getBlockByNumber",
         vec![Value::String(number_hex)],
     )
-    .await
-    {
-        Ok(value) => value,
-        Err(_) => {
-            let latest = rpc_call_value(state, "zero_getLatestBlock", vec![]).await.ok()?;
-            let latest_block = parse_zero_block(&latest)?;
-            if latest_block.number == number {
-                return Some(latest_block);
-            }
-            return None;
-        }
-    };
-    parse_zero_block(&value).filter(|block| block.number == number)
+    .await?;
+    Ok(parse_zero_block(&value).filter(|block| block.number == number))
 }
 
 async fn fetch_blocks_range_best_effort(
@@ -1231,7 +1209,7 @@ async fn fetch_blocks_range_best_effort(
     from: u64,
     to: u64,
     limit: usize,
-) -> Vec<ExplorerBlock> {
+) -> Result<Vec<ExplorerBlock>, ApiError> {
     let value = rpc_call_value(
         state,
         "zero_getBlocksRange",
@@ -1241,8 +1219,7 @@ async fn fetch_blocks_range_best_effort(
             "limit": limit,
         })],
     )
-    .await
-    .unwrap_or(Value::Null);
+    .await?;
     let mut seen = HashSet::new();
     let mut items = Vec::new();
     if let Some(arr) = value.get("items").and_then(Value::as_array) {
@@ -1254,26 +1231,14 @@ async fn fetch_blocks_range_best_effort(
             }
         }
     }
-    if items.is_empty() {
-        for number in (from..=to).rev() {
-            if items.len() >= limit {
-                break;
-            }
-            if let Some(block) = fetch_block_by_number_best_effort(state, number).await {
-                if seen.insert(block.number) {
-                    items.push(block);
-                }
-            }
-        }
-    }
-    items
+    Ok(items)
 }
 
 async fn fetch_blocks_window(
     state: &AppState,
     latest: u64,
     lookback_blocks: usize,
-) -> Vec<ExplorerBlock> {
+) -> Result<Vec<ExplorerBlock>, ApiError> {
     let mut remaining = lookback_blocks.max(1) as u64;
     let mut to = latest;
     let mut all = Vec::new();
@@ -1282,7 +1247,7 @@ async fn fetch_blocks_window(
     while remaining > 0 {
         let batch = remaining.min(MAX_BLOCKS_RANGE_BATCH as u64) as usize;
         let from = to.saturating_sub((batch as u64).saturating_sub(1));
-        let batch_items = fetch_blocks_range_best_effort(state, from, to, batch).await;
+        let batch_items = fetch_blocks_range_best_effort(state, from, to, batch).await?;
         if batch_items.is_empty() {
             break;
         }
@@ -1303,7 +1268,7 @@ async fn fetch_blocks_window(
         to = min_number.saturating_sub(1);
     }
     all.sort_by(|a, b| b.number.cmp(&a.number));
-    all
+    Ok(all)
 }
 
 fn aggregate_miner_stats(blocks: &[ExplorerBlock]) -> Vec<MinerStatsItem> {
@@ -1604,7 +1569,10 @@ async fn rpc_call_value(
             message: format!("rpc {method} returned error: {err}"),
         });
     }
-    Ok(payload.result.unwrap_or(Value::Null))
+    payload.result.ok_or_else(|| ApiError {
+        code: "rpc_error",
+        message: format!("rpc {method} missing result"),
+    })
 }
 
 fn parse_u64_hex(input: &str) -> Option<u64> {
