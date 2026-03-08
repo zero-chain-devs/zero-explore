@@ -1653,6 +1653,33 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_u64_hex_accepts_prefixed_and_unprefixed_values() {
+        assert_eq!(parse_u64_hex("0x2a"), Some(42));
+        assert_eq!(parse_u64_hex("2a"), Some(42));
+        assert_eq!(parse_u64_hex("bogus"), None);
+    }
+
+    #[test]
+    fn test_parse_zero_block_falls_back_to_tx_count_and_zero_address() {
+        let block = parse_zero_block(&json!({
+            "number": "0x5",
+            "hash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "parent_hash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "timestamp": 99,
+            "tx_count": 3,
+            "coinbase": "not-an-address"
+        }))
+        .expect("block should parse");
+
+        assert_eq!(block.number, 5);
+        assert_eq!(block.tx_count, 3);
+        assert_eq!(
+            block.miner,
+            "ZER0x0000000000000000000000000000000000000000"
+        );
+    }
+
+    #[test]
     fn test_parse_zero_block_uses_transaction_array_and_normalizes_coinbase() {
         let block = parse_zero_block(&json!({
             "number": "0x2",
