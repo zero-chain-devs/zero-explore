@@ -1600,3 +1600,246 @@ where
         stale: entries.saturating_sub(fresh),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn temp_state_file(label: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("system time should be after epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("zero-explore-{label}-{nanos}.json"))
+    }
+
+    fn test_app_state(state_file: PathBuf) -> AppState {
+        AppState {
+            rpc_url: "http://127.0.0.1:1".to_string(),
+            client: Client::new(),
+            activity: Arc::new(RwLock::new(ExplorerActivity {
+                recent_compute: Vec::new(),
+                hot_addresses: HashMap::new(),
+            })),
+            state_file,
+            cache: Arc::new(RwLock::new(BackendCache::default())),
+        }
+    }
+
+    #[test]
+    fn test_normalize_supported_address_accepts_case_insensitive_prefix_only() {
+        assert_eq!(
+            normalize_supported_address("zer0x1111111111111111111111111111111111111111"),
+            Some("ZER0x1111111111111111111111111111111111111111".to_string())
+        );
+        assert_eq!(
+            normalize_supported_address("0x1111111111111111111111111111111111111111"),
+            None
+        );
+        assert_eq!(
+            normalize_supported_address("native1111111111111111111111111111111111111111"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_canonicalize_observed_address_accepts_raw_0x_and_rejects_invalid() {
+        assert_eq!(
+            canonicalize_observed_address("0x1111111111111111111111111111111111111111"),
+            Some("ZER0x1111111111111111111111111111111111111111".to_string())
+        );
+        assert_eq!(canonicalize_observed_address("0x1234"), None);
+    }
+
+    #[test]
+    fn test_parse_zero_block_uses_transaction_array_and_normalizes_coinbase() {
+        let block = parse_zero_block(&json!({
+            "number": "0x2",
+            "hash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "parent_hash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "timestamp": 42,
+            "difficulty": "0x3",
+            "nonce": 7,
+            "coinbase": "0x1111111111111111111111111111111111111111",
+            "transactions": [
+                {"hash": "0x01"},
+                {"hash": "0x02"}
+            ],
+            "extra_data": "0x99"
+        }))
+        .expect("block should parse");
+
+        assert_eq!(block.number, 2);
+        assert_eq!(block.tx_count, 2);
+        assert_eq!(block.miner, "ZER0x1111111111111111111111111111111111111111");
+        assert_eq!(block.extra_data.as_deref(), Some("0x99"));
+    }
+
+    #[test]
+    fn test_aggregate_miner_stats_counts_share_and_orders_by_blocks_then_last_seen() {
+        let blocks = vec![
+            ExplorerBlock {
+                number: 3,
+                number_hex: "0x3".to_string(),
+                hash: "0x03".to_string(),
+                parent_hash: "0x02".to_string(),
+                timestamp: 300,
+                difficulty: "0x1".to_string(),
+                nonce: 3,
+                miner: "ZER0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+                tx_count: 0,
+                extra_data: None,
+            },
+            ExplorerBlock {
+                number: 2,
+                number_hex: "0x2".to_string(),
+                hash: "0x02".to_string(),
+                parent_hash: "0x01".to_string(),
+                timestamp: 200,
+                difficulty: "0x1".to_string(),
+                nonce: 2,
+                miner: "ZER0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+                tx_count: 0,
+                extra_data: None,
+            },
+            ExplorerBlock {
+                number: 1,
+                number_hex: "0x1".to_string(),
+                hash: "0x01".to_string(),
+                parent_hash: "0x00".to_string(),
+                timestamp: 150,
+                difficulty: "0x1".to_string(),
+                nonce: 1,
+                miner: "ZER0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string(),
+                tx_count: 0,
+                extra_data: None,
+            },
+        ];
+
+        let stats = aggregate_miner_stats(&blocks);
+        assert_eq!(stats.len(), 2);
+        assert_eq!(
+            stats[0].address,
+            "ZER0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        );
+        assert_eq!(stats[0].blocks_mined, 2);
+        assert_eq!(stats[0].first_block, 2);
+        assert_eq!(stats[0].last_block, 3);
+        assert_eq!(stats[0].share_of_window, 2.0 / 3.0);
+        assert_eq!(
+            stats[1].address,
+            "ZER0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        );
+        assert_eq!(stats[1].share_of_window, 1.0 / 3.0);
+    }
+
+    #[test]
+    fn test_normalize_number_param_handles_decimal_and_invalid_values() {
+        assert_eq!(normalize_number_param("15").unwrap(), "0xf");
+        assert_eq!(normalize_number_param("0xa").unwrap(), "0xa");
+        let err = normalize_number_param("latest").expect_err("invalid decimal should fail");
+        assert_eq!(err.code, "bad_request");
+    }
+
+    #[test]
+    fn test_summarize_cache_map_counts_fresh_and_stale_entries() {
+        let now = Instant::now();
+        let mut map = HashMap::new();
+        map.insert(
+            "fresh",
+            CachedValue {
+                value: 1u64,
+                created_at: now - Duration::from_secs(CACHE_TTL_SECS.saturating_sub(1)),
+            },
+        );
+        map.insert(
+            "stale",
+            CachedValue {
+                value: 2u64,
+                created_at: now - Duration::from_secs(CACHE_TTL_SECS + 1),
+            },
+        );
+
+        let summary = summarize_cache_map(&map, now);
+        assert_eq!(summary.entries, 2);
+        assert_eq!(summary.fresh, 1);
+        assert_eq!(summary.stale, 1);
+    }
+
+    #[tokio::test]
+    async fn test_load_activity_returns_empty_for_invalid_json() {
+        let path = temp_state_file("invalid-state");
+        fs::write(&path, "{not-valid-json").expect("invalid json fixture should be written");
+
+        let activity = load_activity(path.clone()).await;
+        assert!(activity.recent_compute.is_empty());
+        assert!(activity.hot_addresses.is_empty());
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn test_record_compute_observation_deduplicates_and_truncates_history() {
+        let path = temp_state_file("compute-observation");
+        let state = test_app_state(path.clone());
+        let existing = (0..200)
+            .map(|index| RecentComputeItem {
+                tx_id: format!("0x{:064x}", index),
+                seen_at_unix: index,
+                success: true,
+            })
+            .collect::<Vec<_>>();
+        {
+            let mut guard = state.activity.write().await;
+            guard.recent_compute = existing;
+        }
+
+        let duplicate_tx = format!("0x{:064x}", 42);
+        record_compute_observation(&state, &duplicate_tx, false).await;
+
+        let guard = state.activity.read().await;
+        assert_eq!(guard.recent_compute.len(), 200);
+        assert_eq!(guard.recent_compute[0].tx_id, duplicate_tx);
+        assert!(!guard.recent_compute[0].success);
+        assert_eq!(
+            guard
+                .recent_compute
+                .iter()
+                .filter(|item| item.tx_id == duplicate_tx)
+                .count(),
+            1
+        );
+        drop(guard);
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn test_record_address_hit_normalizes_and_accumulates_hits() {
+        let path = temp_state_file("address-hit");
+        let state = test_app_state(path.clone());
+        let address = "zer0x1111111111111111111111111111111111111111";
+
+        record_address_hit(&state, address).await;
+        record_address_hit(&state, "ZER0x1111111111111111111111111111111111111111").await;
+
+        let guard = state.activity.read().await;
+        assert_eq!(guard.hot_addresses.len(), 1);
+        let item = guard
+            .hot_addresses
+            .get("zer0x1111111111111111111111111111111111111111")
+            .expect("normalized hot address should exist");
+        assert_eq!(
+            item.address,
+            "ZER0x1111111111111111111111111111111111111111"
+        );
+        assert_eq!(item.hits, 2);
+        drop(guard);
+
+        let persisted = fs::read_to_string(&path).expect("persisted state should be written");
+        assert!(persisted.contains("ZER0x1111111111111111111111111111111111111111"));
+
+        let _ = fs::remove_file(path);
+    }
+}
