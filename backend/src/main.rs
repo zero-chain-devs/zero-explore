@@ -1129,14 +1129,24 @@ async fn sync_background_activity_once(state: &AppState) -> Result<(), ApiError>
 
 async fn fetch_block_by_number_best_effort(state: &AppState, number: u64) -> Option<ExplorerBlock> {
     let number_hex = format!("0x{number:x}");
-    let value = rpc_call_value(
+    let value = match rpc_call_value(
         state,
         "zero_getBlockByNumber",
         vec![Value::String(number_hex)],
     )
     .await
-    .ok()?;
-    parse_zero_block(&value)
+    {
+        Ok(value) => value,
+        Err(_) => {
+            let latest = rpc_call_value(state, "zero_getLatestBlock", vec![]).await.ok()?;
+            let latest_block = parse_zero_block(&latest)?;
+            if latest_block.number == number {
+                return Some(latest_block);
+            }
+            return None;
+        }
+    };
+    parse_zero_block(&value).filter(|block| block.number == number)
 }
 
 async fn fetch_blocks_range_best_effort(
@@ -1161,6 +1171,18 @@ async fn fetch_blocks_range_best_effort(
     if let Some(arr) = value.get("items").and_then(Value::as_array) {
         for v in arr {
             if let Some(block) = parse_zero_block(v) {
+                if seen.insert(block.number) {
+                    items.push(block);
+                }
+            }
+        }
+    }
+    if items.is_empty() {
+        for number in (from..=to).rev() {
+            if items.len() >= limit {
+                break;
+            }
+            if let Some(block) = fetch_block_by_number_best_effort(state, number).await {
                 if seen.insert(block.number) {
                     items.push(block);
                 }
