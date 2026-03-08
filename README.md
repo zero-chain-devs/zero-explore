@@ -54,6 +54,7 @@ cd /root/workspaces/blockchain/zero-explore
 - `GET /api/blocks/:number`
 - `GET /api/accounts/:address`
 - `GET /api/accounts/:address/blocks`
+- `GET /api/accounts/:address/txs`
 - `GET /api/miners`
 - `GET /api/miners/:address`
 - `GET /api/txs/recent`
@@ -72,4 +73,5 @@ cd /root/workspaces/blockchain/zero-explore
 - 统计总览：`/api/overview` 聚合链高、24h 出块、平均出块间隔、活跃矿工与最近计算交易总量。
 - 矿工视图：`/api/miners` 与 `/api/miners/:address` 支持矿工榜单和单矿工出块明细。
 - 地址出块视图：`/api/accounts/:address/blocks` 可直接查看地址在窗口内的出块记录。
-- 最近交易视图：`/api/txs/recent` 基于链上 `zero_listComputeTxResults` 返回分页结果。
+- 地址交易视图：`/api/accounts/:address/txs` 支持地址转账历史分页查询。
+- 最近交易视图：`/api/txs/recent` 优先使用链上 `zero_listTransactions`（含 transfer + compute），旧节点自动回退。

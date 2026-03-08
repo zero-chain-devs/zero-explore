@@ -330,6 +330,7 @@ async fn main() -> Result<()> {
         .route("/api/blocks/:number", get(get_block_by_number))
         .route("/api/accounts/:address", get(get_account_overview))
         .route("/api/accounts/:address/blocks", get(list_account_blocks))
+        .route("/api/accounts/:address/txs", get(list_account_txs))
         .route("/api/miners", get(list_miners))
         .route("/api/miners/:address", get(get_miner_detail))
         .route("/api/activity/hot-addresses", get(list_hot_addresses))
@@ -659,6 +660,32 @@ async fn list_account_blocks(
     }))
 }
 
+async fn list_account_txs(
+    State(state): State<AppState>,
+    Path(address): Path<String>,
+    Query(query): Query<Pagination>,
+) -> Result<Json<Value>, ApiError> {
+    let Some(address) = normalize_supported_address(&address) else {
+        return Err(ApiError {
+            code: "bad_request",
+            message: format!("invalid address: {address}"),
+        });
+    };
+    let page = query.page.unwrap_or(1).max(1);
+    let limit = query.limit.unwrap_or(20).clamp(1, 200);
+    let result = rpc_call_value(
+        &state,
+        "zero_getTransactionsByAddress",
+        vec![json!({
+            "address": address,
+            "page": page,
+            "limit": limit,
+        })],
+    )
+    .await?;
+    Ok(Json(result))
+}
+
 async fn get_overview(State(state): State<AppState>) -> Result<Json<OverviewResponse>, ApiError> {
     let stats = network_stats(State(state.clone())).await?.0;
     let latest = stats.latest_block_number;
@@ -796,16 +823,57 @@ async fn list_recent_txs(
 ) -> Result<Json<Value>, ApiError> {
     let page = query.page.unwrap_or(1).max(1);
     let limit = query.limit.unwrap_or(20).clamp(1, 200);
-    let result = rpc_call_value(
+    let primary = rpc_call_value(
         &state,
-        "zero_listComputeTxResults",
+        "zero_listTransactions",
         vec![json!({
             "page": page,
             "limit": limit,
+            "kind": "all",
         })],
     )
-    .await?;
+    .await;
+    let result = match primary {
+        Ok(v) => v,
+        Err(_) => rpc_call_value(
+            &state,
+            "zero_listComputeTxResults",
+            vec![json!({
+                "page": page,
+                "limit": limit,
+            })],
+        )
+        .await?,
+    };
     Ok(Json(result))
+}
+
+async fn get_tx_detail(
+    State(state): State<AppState>,
+    Path(tx_id): Path<String>,
+) -> Result<Json<ComputeTxResultView>, ApiError> {
+    if !is_hex_32(&tx_id) {
+        return Err(ApiError {
+            code: "bad_request",
+            message: format!("invalid tx_id: {tx_id}"),
+        });
+    }
+
+    let tx_detail = rpc_call_value(
+        &state,
+        "zero_getTransactionByHash",
+        vec![Value::String(tx_id.clone())],
+    )
+    .await
+    .unwrap_or(Value::Null);
+    if !tx_detail.is_null() {
+        return Ok(Json(ComputeTxResultView {
+            tx_id,
+            result: tx_detail,
+        }));
+    }
+
+    get_compute_result(State(state), Path(tx_id)).await
 }
 
 async fn list_hot_addresses(
@@ -862,13 +930,6 @@ async fn get_compute_result(
     .await;
 
     Ok(Json(ComputeTxResultView { tx_id, result }))
-}
-
-async fn get_tx_detail(
-    State(state): State<AppState>,
-    Path(tx_id): Path<String>,
-) -> Result<Json<ComputeTxResultView>, ApiError> {
-    get_compute_result(State(state), Path(tx_id)).await
 }
 
 async fn get_object_view(
@@ -1016,6 +1077,22 @@ async fn search(
     }
 
     if is_hex_32(&query) {
+        let tx = rpc_call_value(
+            &state,
+            "zero_getTransactionByHash",
+            vec![Value::String(query.clone())],
+        )
+        .await
+        .unwrap_or(Value::Null);
+        if !tx.is_null() {
+            return Ok(Json(SearchResponse {
+                kind: "tx".to_string(),
+                primary_id: query.clone(),
+                canonical_route: format!("/tx/{query}"),
+                value: tx,
+            }));
+        }
+
         let compute = rpc_call_value(
             &state,
             "zero_getComputeTxResult",
@@ -1527,10 +1604,7 @@ async fn rpc_call_value(
             message: format!("rpc {method} returned error: {err}"),
         });
     }
-    payload.result.ok_or_else(|| ApiError {
-        code: "rpc_error",
-        message: format!("rpc {method} missing result"),
-    })
+    Ok(payload.result.unwrap_or(Value::Null))
 }
 
 fn parse_u64_hex(input: &str) -> Option<u64> {

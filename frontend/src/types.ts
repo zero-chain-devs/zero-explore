@@ -150,13 +150,23 @@ export type OverviewResponse = {
 };
 
 export type RecentTxItem = {
-  tx_id: string;
-  result: {
+  kind?: string;
+  tx_id?: string;
+  tx_hash?: string;
+  hash?: string;
+  timestamp?: number;
+  from?: string;
+  to?: string;
+  value?: string;
+  block_number?: number;
+  status?: string;
+  result?: {
     ok?: boolean;
     duplicate?: boolean;
     consumed_inputs?: number;
     read_objects?: number;
     created_outputs?: number;
+    submitted_at_unix?: number;
   };
 };
 

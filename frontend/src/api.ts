@@ -114,6 +114,10 @@ export const api = {
     getJson<AddressBlocksResponse>(
       `/api/accounts/${encodeURIComponent(address)}/blocks?limit=${limit}&page=${page}`,
     ),
+  accountTxs: (address: string, limit = 20, page = 1) =>
+    getJson<RecentTxResponse>(
+      `/api/accounts/${encodeURIComponent(address)}/txs?limit=${limit}&page=${page}`,
+    ),
   miners: (lookback = 2000, limit = 100) =>
     getJson<MinerStatsResponse>(`/api/miners?lookback=${lookback}&limit=${limit}`),
   minerDetail: (address: string, limit = 20, page = 1) =>

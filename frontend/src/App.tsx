@@ -668,14 +668,16 @@ function AccountPage() {
   const { address } = useParams();
   const [data, setData] = useState<AccountOverview | null>(null);
   const [minedBlocks, setMinedBlocks] = useState<AddressBlocksResponse | null>(null);
+  const [txs, setTxs] = useState<RecentTxResponse | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!address) return;
-    Promise.all([api.account(address), api.accountBlocks(address, 20, 1)])
-      .then(([overview, blocks]) => {
+    Promise.all([api.account(address), api.accountBlocks(address, 20, 1), api.accountTxs(address, 20, 1)])
+      .then(([overview, blocks, txList]) => {
         setData(overview);
         setMinedBlocks(blocks);
+        setTxs(txList);
       })
       .catch((e) => {
         const classified = classifyError(e);
@@ -726,6 +728,42 @@ function AccountPage() {
             {!(minedBlocks?.items.length ?? 0) ? (
               <tr>
                 <td colSpan={3} className="muted">No mined blocks found in current window.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </Section>
+
+      <Section title="Transactions (recent)">
+        <table className="table compact">
+          <thead>
+            <tr>
+              <th>Tx</th>
+              <th>Kind</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Value</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(txs?.items ?? []).map((x, idx) => (
+              <tr key={x.tx_hash ?? x.tx_id ?? x.hash ?? `acct-tx-${idx}`}>
+                <td>
+                  <Link to={`/tx/${x.tx_hash ?? x.tx_id ?? x.hash ?? ""}`}>
+                    {shortenHash(x.tx_hash ?? x.tx_id ?? x.hash ?? "-", 12)}
+                  </Link>
+                </td>
+                <td>{x.kind ?? "-"}</td>
+                <td>{x.from ? <Link to={`/accounts/${x.from}`}>{shortenHash(x.from, 10)}</Link> : "-"}</td>
+                <td>{x.to ? <Link to={`/accounts/${x.to}`}>{shortenHash(x.to, 10)}</Link> : "-"}</td>
+                <td>{x.value ?? "-"}</td>
+                <td>{toRelativeTime(x.timestamp ?? x.result?.submitted_at_unix)}</td>
+              </tr>
+            ))}
+            {!(txs?.items.length ?? 0) ? (
+              <tr>
+                <td colSpan={6} className="muted">No transactions found for this address.</td>
               </tr>
             ) : null}
           </tbody>
@@ -960,31 +998,39 @@ function TxsPage() {
   return (
     <>
       <SearchBar smartRedirect />
-      <Section title="Recent Compute Transactions">
+      <Section title="Recent Transactions">
         {error ? <div className="error">{error}</div> : null}
         <table className="table">
           <thead>
             <tr>
               <th>Tx</th>
+              <th>Kind</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Value</th>
               <th>OK</th>
-              <th>Duplicate</th>
-              <th>Inputs</th>
-              <th>Outputs</th>
+              <th>Time</th>
             </tr>
           </thead>
           <tbody>
-            {(data?.items ?? []).map((x) => (
-              <tr key={x.tx_id}>
-                <td><Link to={`/compute/${x.tx_id}`}>{shortenHash(x.tx_id, 12)}</Link></td>
+            {(data?.items ?? []).map((x, idx) => (
+              <tr key={x.tx_hash ?? x.tx_id ?? x.hash ?? `tx-${idx}`}>
+                <td>
+                  <Link to={`/tx/${x.tx_hash ?? x.tx_id ?? x.hash ?? ""}`}>
+                    {shortenHash(x.tx_hash ?? x.tx_id ?? x.hash ?? "-", 12)}
+                  </Link>
+                </td>
+                <td>{x.kind ?? "-"}</td>
+                <td>{x.from ? <Link to={`/accounts/${x.from}`}>{shortenHash(x.from, 10)}</Link> : "-"}</td>
+                <td>{x.to ? <Link to={`/accounts/${x.to}`}>{shortenHash(x.to, 10)}</Link> : "-"}</td>
+                <td>{x.value ?? "-"}</td>
                 <td>{x.result?.ok === undefined ? "-" : String(Boolean(x.result.ok))}</td>
-                <td>{x.result?.duplicate === undefined ? "-" : String(Boolean(x.result.duplicate))}</td>
-                <td>{x.result?.consumed_inputs ?? "-"}</td>
-                <td>{x.result?.created_outputs ?? "-"}</td>
+                <td>{toRelativeTime(x.timestamp ?? x.result?.submitted_at_unix)}</td>
               </tr>
             ))}
             {!(data?.items.length ?? 0) ? (
               <tr>
-                <td colSpan={5} className="muted">No transactions yet.</td>
+                <td colSpan={7} className="muted">No transactions yet.</td>
               </tr>
             ) : null}
           </tbody>
