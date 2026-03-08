@@ -318,7 +318,8 @@ async fn main() -> Result<()> {
     spawn_background_activity_sync(state.clone());
 
     let frontend_index = PathBuf::from(&frontend_dist).join("index.html");
-    let static_service = ServeDir::new(&frontend_dist).not_found_service(ServeFile::new(frontend_index));
+    let static_service =
+        ServeDir::new(&frontend_dist).not_found_service(ServeFile::new(frontend_index));
 
     let app = Router::new()
         .route("/health", get(health))
@@ -773,7 +774,8 @@ async fn get_miner_detail(
     let lookback = 5_000usize;
     let latest = latest_block_number(&state).await?;
     let blocks = fetch_blocks_window(&state, latest, lookback).await?;
-    let miner_blocks: Vec<ExplorerBlock> = blocks.into_iter().filter(|b| b.miner == address).collect();
+    let miner_blocks: Vec<ExplorerBlock> =
+        blocks.into_iter().filter(|b| b.miner == address).collect();
     if miner_blocks.is_empty() {
         return Err(ApiError {
             code: "not_found",
