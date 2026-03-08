@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     net::SocketAddr,
     path::PathBuf,
@@ -27,6 +27,7 @@ use tower_http::{
 use tracing::{error, info, warn};
 
 const CACHE_TTL_SECS: u64 = 5;
+const MAX_BLOCKS_RANGE_BATCH: usize = 500;
 
 #[derive(Clone)]
 struct AppState {
@@ -64,6 +65,12 @@ struct Pagination {
 struct BlockRangeQuery {
     from: Option<u64>,
     to: Option<u64>,
+    limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MinerQuery {
+    lookback: Option<usize>,
     limit: Option<usize>,
 }
 
@@ -117,6 +124,55 @@ struct BlockRangeResponse {
     from: u64,
     to: u64,
     items: Vec<ExplorerBlock>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct MinerStatsItem {
+    address: String,
+    blocks_mined: u64,
+    first_block: u64,
+    last_block: u64,
+    last_seen_unix: u64,
+    share_of_window: f64,
+}
+
+#[derive(Debug, Serialize)]
+struct MinerStatsResponse {
+    latest_block: u64,
+    lookback_blocks: usize,
+    unique_miners: usize,
+    items: Vec<MinerStatsItem>,
+}
+
+#[derive(Debug, Serialize)]
+struct MinerDetailResponse {
+    miner: MinerStatsItem,
+    page: usize,
+    limit: usize,
+    total_blocks: usize,
+    blocks: Vec<ExplorerBlock>,
+}
+
+#[derive(Debug, Serialize)]
+struct AddressBlocksResponse {
+    address: String,
+    page: usize,
+    limit: usize,
+    total_blocks: usize,
+    items: Vec<ExplorerBlock>,
+}
+
+#[derive(Debug, Serialize)]
+struct OverviewResponse {
+    chain_id: String,
+    network_id: String,
+    latest_block_number: u64,
+    indexed_blocks: usize,
+    unique_miners: usize,
+    block_24h: u64,
+    avg_block_interval_secs: f64,
+    recent_compute_txs: u64,
+    top_miners: Vec<MinerStatsItem>,
 }
 
 #[derive(Debug, Serialize)]
@@ -268,12 +324,17 @@ async fn main() -> Result<()> {
         .route("/health", get(health))
         .route("/api/network/health", get(network_health))
         .route("/api/network/stats", get(network_stats))
+        .route("/api/overview", get(get_overview))
         .route("/api/blocks", get(list_blocks))
         .route("/api/blocks/range", get(list_blocks_range))
         .route("/api/blocks/:number", get(get_block_by_number))
         .route("/api/accounts/:address", get(get_account_overview))
+        .route("/api/accounts/:address/blocks", get(list_account_blocks))
+        .route("/api/miners", get(list_miners))
+        .route("/api/miners/:address", get(get_miner_detail))
         .route("/api/activity/hot-addresses", get(list_hot_addresses))
         .route("/api/compute/recent", get(list_recent_compute))
+        .route("/api/txs/recent", get(list_recent_txs))
         .route("/api/compute/:tx_id", get(get_compute_result))
         .route("/api/tx/:tx_id", get(get_tx_detail))
         .route("/api/objects/:object_id", get(get_object_view))
@@ -416,20 +477,13 @@ async fn list_blocks(
 
     let latest_num = latest_block_number(&state).await?;
     let skip = (page.saturating_sub(1)).saturating_mul(limit) as u64;
-    let has_more = latest_num > skip;
-
-    let mut items = Vec::new();
-    for idx in 0..limit {
-        let absolute = skip.saturating_add(idx as u64);
-        if absolute > latest_num {
-            break;
-        }
-        let n = latest_num.saturating_sub(absolute);
-        if let Some(block) = fetch_block_by_number_best_effort(&state, n).await {
-            record_address_hit(&state, &block.miner).await;
-            items.push(block);
-        }
+    let to = latest_num.saturating_sub(skip);
+    let from = to.saturating_sub((limit as u64).saturating_sub(1));
+    let items = fetch_blocks_range_best_effort(&state, from, to, limit).await;
+    for block in &items {
+        record_address_hit(&state, &block.miner).await;
     }
+    let has_more = skip.saturating_add(items.len() as u64) < latest_num.saturating_add(1);
 
     let response = BlockListResponse {
         latest_number: latest_num,
@@ -478,17 +532,7 @@ async fn list_blocks_range(
         return Ok(Json(cached));
     }
 
-    let mut items = Vec::new();
-    let mut n = to;
-    while n >= from && items.len() < limit {
-        if let Some(block) = fetch_block_by_number_best_effort(&state, n).await {
-            items.push(block);
-        }
-        if n == 0 {
-            break;
-        }
-        n = n.saturating_sub(1);
-    }
+    let items = fetch_blocks_range_best_effort(&state, from, to, limit).await;
 
     let resp = BlockRangeResponse { from, to, items };
 
@@ -579,6 +623,161 @@ async fn get_account_overview(
     }))
 }
 
+async fn list_account_blocks(
+    State(state): State<AppState>,
+    Path(address): Path<String>,
+    Query(query): Query<Pagination>,
+) -> Result<Json<AddressBlocksResponse>, ApiError> {
+    let Some(address) = normalize_supported_address(&address) else {
+        return Err(ApiError {
+            code: "bad_request",
+            message: format!("invalid address: {address}"),
+        });
+    };
+    let page = query.page.unwrap_or(1).max(1);
+    let limit = query.limit.unwrap_or(20).clamp(1, 200);
+    let lookback = 5_000usize;
+
+    let latest = latest_block_number(&state).await?;
+    let window = fetch_blocks_window(&state, latest, lookback).await;
+    let mined: Vec<ExplorerBlock> = window.into_iter().filter(|b| b.miner == address).collect();
+
+    let start = (page.saturating_sub(1)).saturating_mul(limit);
+    let end = start.saturating_add(limit).min(mined.len());
+    let items = if start >= mined.len() {
+        Vec::new()
+    } else {
+        mined[start..end].to_vec()
+    };
+
+    Ok(Json(AddressBlocksResponse {
+        address,
+        page,
+        limit,
+        total_blocks: mined.len(),
+        items,
+    }))
+}
+
+async fn get_overview(State(state): State<AppState>) -> Result<Json<OverviewResponse>, ApiError> {
+    let stats = network_stats(State(state.clone())).await?.0;
+    let latest = stats.latest_block_number;
+    let lookback = latest.saturating_add(1).min(2_000) as usize;
+    let blocks = fetch_blocks_window(&state, latest, lookback).await;
+    let miner_items = aggregate_miner_stats(&blocks);
+
+    let mut timestamps: Vec<u64> = blocks.iter().map(|b| b.timestamp).collect();
+    timestamps.sort_unstable();
+    let mut interval_sum = 0u128;
+    let mut interval_count = 0u128;
+    for pair in timestamps.windows(2) {
+        interval_sum = interval_sum.saturating_add(pair[1].saturating_sub(pair[0]) as u128);
+        interval_count = interval_count.saturating_add(1);
+    }
+    let avg_block_interval_secs = if interval_count == 0 {
+        0.0
+    } else {
+        (interval_sum as f64) / (interval_count as f64)
+    };
+    let now = current_unix_secs();
+    let block_24h = blocks
+        .iter()
+        .filter(|b| now.saturating_sub(b.timestamp) <= 86_400)
+        .count() as u64;
+
+    let recent_compute_total = rpc_call_value(
+        &state,
+        "zero_listComputeTxResults",
+        vec![json!({"page": 1, "limit": 1})],
+    )
+    .await
+    .ok()
+    .and_then(|v| v.get("total").and_then(Value::as_u64))
+    .unwrap_or(0);
+
+    Ok(Json(OverviewResponse {
+        chain_id: stats.chain_id,
+        network_id: stats.network_id,
+        latest_block_number: latest,
+        indexed_blocks: blocks.len(),
+        unique_miners: miner_items.len(),
+        block_24h,
+        avg_block_interval_secs,
+        recent_compute_txs: recent_compute_total,
+        top_miners: miner_items.into_iter().take(10).collect(),
+    }))
+}
+
+async fn list_miners(
+    State(state): State<AppState>,
+    Query(query): Query<MinerQuery>,
+) -> Result<Json<MinerStatsResponse>, ApiError> {
+    let latest = latest_block_number(&state).await?;
+    let lookback = query.lookback.unwrap_or(2_000).clamp(10, 20_000);
+    let response_limit = query.limit.unwrap_or(100).clamp(1, 500);
+
+    let blocks = fetch_blocks_window(&state, latest, lookback).await;
+    let all_items = aggregate_miner_stats(&blocks);
+    let unique_miners = all_items.len();
+    let mut items = all_items;
+    items.truncate(response_limit);
+
+    Ok(Json(MinerStatsResponse {
+        latest_block: latest,
+        lookback_blocks: lookback,
+        unique_miners,
+        items,
+    }))
+}
+
+async fn get_miner_detail(
+    State(state): State<AppState>,
+    Path(address): Path<String>,
+    Query(query): Query<Pagination>,
+) -> Result<Json<MinerDetailResponse>, ApiError> {
+    let Some(address) = normalize_supported_address(&address) else {
+        return Err(ApiError {
+            code: "bad_request",
+            message: format!("invalid address: {address}"),
+        });
+    };
+    let page = query.page.unwrap_or(1).max(1);
+    let limit = query.limit.unwrap_or(20).clamp(1, 200);
+    let lookback = 5_000usize;
+    let latest = latest_block_number(&state).await?;
+    let blocks = fetch_blocks_window(&state, latest, lookback).await;
+    let miner_blocks: Vec<ExplorerBlock> = blocks.into_iter().filter(|b| b.miner == address).collect();
+    if miner_blocks.is_empty() {
+        return Err(ApiError {
+            code: "not_found",
+            message: format!("miner not found in last {lookback} blocks: {address}"),
+        });
+    }
+    let stats = aggregate_miner_stats(&miner_blocks)
+        .into_iter()
+        .next()
+        .ok_or(ApiError {
+            code: "not_found",
+            message: format!("miner not found: {address}"),
+        })?;
+
+    let start = (page.saturating_sub(1)).saturating_mul(limit);
+    let end = start.saturating_add(limit).min(miner_blocks.len());
+    let page_items = if start >= miner_blocks.len() {
+        Vec::new()
+    } else {
+        miner_blocks[start..end].to_vec()
+    };
+
+    Ok(Json(MinerDetailResponse {
+        miner: stats,
+        page,
+        limit,
+        total_blocks: miner_blocks.len(),
+        blocks: page_items,
+    }))
+}
+
 async fn list_recent_compute(
     State(state): State<AppState>,
     Query(query): Query<Pagination>,
@@ -589,6 +788,24 @@ async fn list_recent_compute(
         guard.recent_compute.iter().take(limit).cloned().collect()
     };
     Json(RecentComputeResponse { items })
+}
+
+async fn list_recent_txs(
+    State(state): State<AppState>,
+    Query(query): Query<Pagination>,
+) -> Result<Json<Value>, ApiError> {
+    let page = query.page.unwrap_or(1).max(1);
+    let limit = query.limit.unwrap_or(20).clamp(1, 200);
+    let result = rpc_call_value(
+        &state,
+        "zero_listComputeTxResults",
+        vec![json!({
+            "page": page,
+            "limit": limit,
+        })],
+    )
+    .await?;
+    Ok(Json(result))
 }
 
 async fn list_hot_addresses(
@@ -911,10 +1128,119 @@ async fn sync_background_activity_once(state: &AppState) -> Result<(), ApiError>
 }
 
 async fn fetch_block_by_number_best_effort(state: &AppState, number: u64) -> Option<ExplorerBlock> {
-    let latest = rpc_call_value(state, "zero_getLatestBlock", vec![])
-        .await
-        .unwrap_or(Value::Null);
-    parse_zero_block(&latest).filter(|b| b.number == number)
+    let number_hex = format!("0x{number:x}");
+    let value = rpc_call_value(
+        state,
+        "zero_getBlockByNumber",
+        vec![Value::String(number_hex)],
+    )
+    .await
+    .ok()?;
+    parse_zero_block(&value)
+}
+
+async fn fetch_blocks_range_best_effort(
+    state: &AppState,
+    from: u64,
+    to: u64,
+    limit: usize,
+) -> Vec<ExplorerBlock> {
+    let value = rpc_call_value(
+        state,
+        "zero_getBlocksRange",
+        vec![json!({
+            "from": format!("0x{from:x}"),
+            "to": format!("0x{to:x}"),
+            "limit": limit,
+        })],
+    )
+    .await
+    .unwrap_or(Value::Null);
+    let mut seen = HashSet::new();
+    let mut items = Vec::new();
+    if let Some(arr) = value.get("items").and_then(Value::as_array) {
+        for v in arr {
+            if let Some(block) = parse_zero_block(v) {
+                if seen.insert(block.number) {
+                    items.push(block);
+                }
+            }
+        }
+    }
+    items
+}
+
+async fn fetch_blocks_window(
+    state: &AppState,
+    latest: u64,
+    lookback_blocks: usize,
+) -> Vec<ExplorerBlock> {
+    let mut remaining = lookback_blocks.max(1) as u64;
+    let mut to = latest;
+    let mut all = Vec::new();
+    let mut seen_numbers = HashSet::new();
+
+    while remaining > 0 {
+        let batch = remaining.min(MAX_BLOCKS_RANGE_BATCH as u64) as usize;
+        let from = to.saturating_sub((batch as u64).saturating_sub(1));
+        let batch_items = fetch_blocks_range_best_effort(state, from, to, batch).await;
+        if batch_items.is_empty() {
+            break;
+        }
+        let mut min_number = u64::MAX;
+        for block in batch_items {
+            min_number = min_number.min(block.number);
+            if seen_numbers.insert(block.number) {
+                all.push(block);
+            }
+        }
+        if min_number == 0 {
+            break;
+        }
+        if remaining <= batch as u64 {
+            break;
+        }
+        remaining = remaining.saturating_sub(batch as u64);
+        to = min_number.saturating_sub(1);
+    }
+    all.sort_by(|a, b| b.number.cmp(&a.number));
+    all
+}
+
+fn aggregate_miner_stats(blocks: &[ExplorerBlock]) -> Vec<MinerStatsItem> {
+    let mut map: HashMap<String, MinerStatsItem> = HashMap::new();
+    let total = blocks.len() as f64;
+    for block in blocks {
+        let entry = map.entry(block.miner.clone()).or_insert(MinerStatsItem {
+            address: block.miner.clone(),
+            blocks_mined: 0,
+            first_block: block.number,
+            last_block: block.number,
+            last_seen_unix: block.timestamp,
+            share_of_window: 0.0,
+        });
+        entry.blocks_mined = entry.blocks_mined.saturating_add(1);
+        entry.first_block = entry.first_block.min(block.number);
+        entry.last_block = entry.last_block.max(block.number);
+        entry.last_seen_unix = entry.last_seen_unix.max(block.timestamp);
+    }
+    let mut items: Vec<_> = map
+        .into_values()
+        .map(|mut it| {
+            it.share_of_window = if total > 0.0 {
+                (it.blocks_mined as f64) / total
+            } else {
+                0.0
+            };
+            it
+        })
+        .collect();
+    items.sort_by(|a, b| {
+        b.blocks_mined
+            .cmp(&a.blocks_mined)
+            .then_with(|| b.last_seen_unix.cmp(&a.last_seen_unix))
+    });
+    items
 }
 
 async fn record_compute_observation(state: &AppState, tx_id: &str, success: bool) {
@@ -1062,7 +1388,16 @@ fn parse_zero_block(v: &Value) -> Option<ExplorerBlock> {
             .and_then(Value::as_str)
             .and_then(canonicalize_observed_address)
             .unwrap_or_else(|| "ZER0x0000000000000000000000000000000000000000".to_string()),
-        tx_count: 0,
+        tx_count: v
+            .get("transactions")
+            .and_then(Value::as_array)
+            .map(|arr| arr.len())
+            .or_else(|| {
+                v.get("tx_count")
+                    .and_then(Value::as_u64)
+                    .and_then(|n| usize::try_from(n).ok())
+            })
+            .unwrap_or(0),
         extra_data: v
             .get("extra_data")
             .and_then(Value::as_str)

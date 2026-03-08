@@ -5,17 +5,22 @@ import { usePolling } from "./hooks/usePolling";
 import { CopyButton, HexOrEmpty, Section, Shell, shortenHash } from "./components";
 import {
   AccountOverview,
+  AddressBlocksResponse,
   BlockRangeResponse,
   BlockListResponse,
   CacheDebugResponse,
   ComputeTxResultView,
   ExplorerBlock,
   HotAddressResponse,
+  MinerDetailResponse,
+  MinerStatsResponse,
   NetworkHealth,
   NetworkStats,
   ObjectOutputView,
+  OverviewResponse,
   RecentComputeItem,
   RecentComputeResponse,
+  RecentTxResponse,
   SearchResponse,
 } from "./types";
 
@@ -287,8 +292,44 @@ function HomeTxRows({ items }: { items: RecentComputeItem[] }) {
   );
 }
 
+function TopMinerRows({ miners }: { miners: MinerStatsResponse["items"] }) {
+  return (
+    <table className="table compact">
+      <thead>
+        <tr>
+          <th>Miner</th>
+          <th>Blocks</th>
+          <th>Share</th>
+          <th>Last Seen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {miners.map((x) => (
+          <tr key={x.address.toLowerCase()}>
+            <td>
+              <Link to={`/miners/${x.address}`}>{shortenHash(x.address, 12)}</Link>
+            </td>
+            <td>{x.blocks_mined}</td>
+            <td>{(x.share_of_window * 100).toFixed(2)}%</td>
+            <td>{toRelativeTime(x.last_seen_unix)}</td>
+          </tr>
+        ))}
+        {!miners.length ? (
+          <tr>
+            <td colSpan={4} className="muted">
+              No miner data yet.
+            </td>
+          </tr>
+        ) : null}
+      </tbody>
+    </table>
+  );
+}
+
 function HomePage() {
   const [stats, setStats] = useState<NetworkStats | null>(null);
+  const [overview, setOverview] = useState<OverviewResponse | null>(null);
+  const [miners, setMiners] = useState<MinerStatsResponse | null>(null);
   const [blocks, setBlocks] = useState<BlockListResponse | null>(null);
   const [recentCompute, setRecentCompute] = useState<RecentComputeResponse | null>(null);
   const [hotAddresses, setHotAddresses] = useState<HotAddressResponse | null>(null);
@@ -307,8 +348,10 @@ function HomePage() {
 
   usePolling(async () => {
     try {
-      const [s, b, c, h, d] = await Promise.all([
+      const [s, o, m, b, c, h, d] = await Promise.all([
         api.networkStats(),
+        api.overview(),
+        api.miners(2000, 10),
         api.blocks(10, 1),
         api.recentCompute(10),
         api.hotAddresses(10),
@@ -316,6 +359,8 @@ function HomePage() {
       ]);
       if (!aliveRef.current) return;
       setStats(s);
+      setOverview(o);
+      setMiners(m);
       setBlocks(b);
       setRecentCompute(c);
       setHotAddresses(h);
@@ -335,6 +380,29 @@ function HomePage() {
       {error ? <div className="error">[{errorCode}] {error}</div> : null}
 
       <HeroMetrics stats={stats} />
+
+      <Section title="Chain Overview">
+        <div className="detail-grid">
+          <div className="k">Chain ID</div>
+          <div className="v">{overview?.chain_id ?? "-"}</div>
+          <div className="k">Network ID</div>
+          <div className="v">{overview?.network_id ?? "-"}</div>
+          <div className="k">Latest Block</div>
+          <div className="v">{overview?.latest_block_number ?? "-"}</div>
+          <div className="k">Indexed Blocks</div>
+          <div className="v">{overview?.indexed_blocks ?? "-"}</div>
+          <div className="k">Unique Miners</div>
+          <div className="v">{overview?.unique_miners ?? "-"}</div>
+          <div className="k">Blocks (24h)</div>
+          <div className="v">{overview?.block_24h ?? "-"}</div>
+          <div className="k">Avg Block Interval</div>
+          <div className="v">
+            {overview ? `${overview.avg_block_interval_secs.toFixed(2)}s` : "-"}
+          </div>
+          <div className="k">Recent Compute Txs</div>
+          <div className="v">{overview?.recent_compute_txs ?? "-"}</div>
+        </div>
+      </Section>
 
       <div className="home-twin">
         <article className="home-panel">
@@ -391,7 +459,7 @@ function HomePage() {
           </div>
           <HomeTxRows items={txWindow === "latest" ? (recentCompute?.items ?? []).slice(0, 6) : (recentCompute?.items ?? [])} />
           <div className="row-end">
-            <Link to="/search/tx">VIEW ALL TRANSACTIONS →</Link>
+            <Link to="/txs">VIEW ALL TRANSACTIONS →</Link>
           </div>
         </article>
       </div>
@@ -424,6 +492,13 @@ function HomePage() {
             ) : null}
           </tbody>
         </table>
+      </Section>
+
+      <Section title="Top Miners">
+        <TopMinerRows miners={miners?.items ?? []} />
+        <div className="row-end">
+          <Link to="/miners">VIEW ALL MINERS →</Link>
+        </div>
       </Section>
 
       <Section title="Backend Cache">
@@ -592,12 +667,16 @@ function BlockDetailPage() {
 function AccountPage() {
   const { address } = useParams();
   const [data, setData] = useState<AccountOverview | null>(null);
+  const [minedBlocks, setMinedBlocks] = useState<AddressBlocksResponse | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!address) return;
-    api.account(address)
-      .then(setData)
+    Promise.all([api.account(address), api.accountBlocks(address, 20, 1)])
+      .then(([overview, blocks]) => {
+        setData(overview);
+        setMinedBlocks(blocks);
+      })
       .catch((e) => {
         const classified = classifyError(e);
         setError(`[${classified.code}] ${classified.message}`);
@@ -625,6 +704,32 @@ function AccountPage() {
         <div className="json-box">
           <pre>{JSON.stringify(data?.utxos ?? [], null, 2)}</pre>
         </div>
+      </Section>
+
+      <Section title="Mined Blocks (recent window)">
+        <table className="table compact">
+          <thead>
+            <tr>
+              <th>Block</th>
+              <th>Hash</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(minedBlocks?.items ?? []).map((b) => (
+              <tr key={b.hash}>
+                <td><Link to={`/blocks/${b.number}`}>{b.number}</Link></td>
+                <td title={b.hash}>{shortenHash(b.hash, 12)} <CopyButton text={b.hash} /></td>
+                <td>{toRelativeTime(b.timestamp)}</td>
+              </tr>
+            ))}
+            {!(minedBlocks?.items.length ?? 0) ? (
+              <tr>
+                <td colSpan={3} className="muted">No mined blocks found in current window.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
       </Section>
     </>
   );
@@ -838,6 +943,173 @@ function DomainPage() {
   );
 }
 
+function TxsPage() {
+  const [data, setData] = useState<RecentTxResponse | null>(null);
+  const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    api.recentTxs(20, page)
+      .then(setData)
+      .catch((e) => {
+        const classified = classifyError(e);
+        setError(`[${classified.code}] ${classified.message}`);
+      });
+  }, [page]);
+
+  return (
+    <>
+      <SearchBar smartRedirect />
+      <Section title="Recent Compute Transactions">
+        {error ? <div className="error">{error}</div> : null}
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Tx</th>
+              <th>OK</th>
+              <th>Duplicate</th>
+              <th>Inputs</th>
+              <th>Outputs</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data?.items ?? []).map((x) => (
+              <tr key={x.tx_id}>
+                <td><Link to={`/compute/${x.tx_id}`}>{shortenHash(x.tx_id, 12)}</Link></td>
+                <td>{x.result?.ok === undefined ? "-" : String(Boolean(x.result.ok))}</td>
+                <td>{x.result?.duplicate === undefined ? "-" : String(Boolean(x.result.duplicate))}</td>
+                <td>{x.result?.consumed_inputs ?? "-"}</td>
+                <td>{x.result?.created_outputs ?? "-"}</td>
+              </tr>
+            ))}
+            {!(data?.items.length ?? 0) ? (
+              <tr>
+                <td colSpan={5} className="muted">No transactions yet.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+        <div className="pager">
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
+            Prev
+          </button>
+          <span>Page {page}</span>
+          <button onClick={() => setPage((p) => p + 1)} disabled={!data?.has_more}>
+            Next
+          </button>
+        </div>
+      </Section>
+    </>
+  );
+}
+
+function MinersPage() {
+  const [data, setData] = useState<MinerStatsResponse | null>(null);
+  const [error, setError] = useState("");
+  const [lookback, setLookback] = useState("2000");
+
+  useEffect(() => {
+    const parsed = Number(lookback);
+    const value = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 2000;
+    api.miners(value, 200)
+      .then(setData)
+      .catch((e) => {
+        const classified = classifyError(e);
+        setError(`[${classified.code}] ${classified.message}`);
+      });
+  }, [lookback]);
+
+  return (
+    <>
+      <SearchBar smartRedirect />
+      <Section title="Miner Leaderboard">
+        <div className="row-end" style={{ justifyContent: "flex-start", gap: 8 }}>
+          <label htmlFor="lookback">Lookback blocks</label>
+          <input
+            id="lookback"
+            value={lookback}
+            onChange={(e) => setLookback(e.target.value)}
+            style={{ width: 120 }}
+          />
+          <span className="muted">latest={data?.latest_block ?? "-"}</span>
+        </div>
+        {error ? <div className="error">{error}</div> : null}
+        <TopMinerRows miners={data?.items ?? []} />
+      </Section>
+    </>
+  );
+}
+
+function MinerDetailPage() {
+  const { address } = useParams();
+  const [data, setData] = useState<MinerDetailResponse | null>(null);
+  const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    if (!address) return;
+    api.minerDetail(address, 20, page)
+      .then(setData)
+      .catch((e) => {
+        const classified = classifyError(e);
+        setError(`[${classified.code}] ${classified.message}`);
+      });
+  }, [address, page]);
+
+  return (
+    <>
+      <SearchBar smartRedirect />
+      <Section title={`Miner ${address}`}>
+        {error ? <div className="error">{error}</div> : null}
+        {data ? (
+          <>
+            <KeyValueGrid
+              data={{
+                address: data.miner.address,
+                blocks_mined: data.miner.blocks_mined,
+                first_block: data.miner.first_block,
+                last_block: data.miner.last_block,
+                last_seen: toDate(data.miner.last_seen_unix),
+                share_of_window: `${(data.miner.share_of_window * 100).toFixed(2)}%`,
+              }}
+            />
+            <table className="table mt12">
+              <thead>
+                <tr>
+                  <th>Block</th>
+                  <th>Hash</th>
+                  <th>Timestamp</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.blocks.map((b) => (
+                  <tr key={b.hash}>
+                    <td><Link to={`/blocks/${b.number}`}>{b.number}</Link></td>
+                    <td title={b.hash}>{shortenHash(b.hash, 12)} <CopyButton text={b.hash} /></td>
+                    <td>{toDate(b.timestamp)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="pager">
+              <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
+                Prev
+              </button>
+              <span>Page {page}</span>
+              <button
+                onClick={() => setPage((p) => p + 1)}
+                disabled={page * (data.limit ?? 20) >= data.total_blocks}
+              >
+                Next
+              </button>
+            </div>
+          </>
+        ) : null}
+      </Section>
+    </>
+  );
+}
+
 function SearchResultPage() {
   const { query } = useParams();
   const [data, setData] = useState<SearchResponse | null>(null);
@@ -941,6 +1213,8 @@ function SearchBar({ defaultValue, smartRedirect = false }: { defaultValue?: str
       </form>
       <div className="quick-nav">
         <Link to="/blocks">Blocks</Link>
+        <Link to="/txs">Transactions</Link>
+        <Link to="/miners">Miners</Link>
         <Link to="/domains/0">Domain #0</Link>
       </div>
     </>
@@ -985,6 +1259,9 @@ export function App() {
         <Route path="/blocks" element={<BlocksPage />} />
         <Route path="/blocks/:number" element={<BlockDetailPage />} />
         <Route path="/accounts/:address" element={<AccountPage />} />
+        <Route path="/txs" element={<TxsPage />} />
+        <Route path="/miners" element={<MinersPage />} />
+        <Route path="/miners/:address" element={<MinerDetailPage />} />
         <Route path="/tx/:txId" element={<TxAliasPage />} />
         <Route path="/compute/:txId" element={<ComputeTxPage />} />
         <Route path="/objects/:objectId" element={<ObjectPage />} />

@@ -1,14 +1,19 @@
 import {
   AccountOverview,
+  AddressBlocksResponse,
   BlockRangeResponse,
   BlockListResponse,
   CacheDebugResponse,
   ComputeTxResultView,
   HotAddressResponse,
+  MinerDetailResponse,
+  MinerStatsResponse,
   NetworkHealth,
   NetworkStats,
   ObjectOutputView,
+  OverviewResponse,
   RecentComputeResponse,
+  RecentTxResponse,
   SearchResponse,
 } from "./types";
 
@@ -96,6 +101,7 @@ export const api = {
   health: () => getJson<{ ok: boolean; service: string }>("/health"),
   networkHealth: () => getJson<NetworkHealth>("/api/network/health"),
   networkStats: () => getJson<NetworkStats>("/api/network/stats"),
+  overview: () => getJson<OverviewResponse>("/api/overview"),
   blocks: (limit = 20, page = 1) =>
     getJson<BlockListResponse>(`/api/blocks?limit=${limit}&page=${page}`),
   blocksRange: (from: number, to: number, limit = 50) =>
@@ -104,10 +110,22 @@ export const api = {
     getJson<{ source: string; block: unknown }>(`/api/blocks/${encodeURIComponent(number)}`),
   account: (address: string) =>
     getJson<AccountOverview>(`/api/accounts/${encodeURIComponent(address)}`),
+  accountBlocks: (address: string, limit = 20, page = 1) =>
+    getJson<AddressBlocksResponse>(
+      `/api/accounts/${encodeURIComponent(address)}/blocks?limit=${limit}&page=${page}`,
+    ),
+  miners: (lookback = 2000, limit = 100) =>
+    getJson<MinerStatsResponse>(`/api/miners?lookback=${lookback}&limit=${limit}`),
+  minerDetail: (address: string, limit = 20, page = 1) =>
+    getJson<MinerDetailResponse>(
+      `/api/miners/${encodeURIComponent(address)}?limit=${limit}&page=${page}`,
+    ),
   computeResult: (txId: string) =>
     getJson<ComputeTxResultView>(`/api/compute/${encodeURIComponent(txId)}`),
   txDetail: (txId: string) =>
     getJson<ComputeTxResultView>(`/api/tx/${encodeURIComponent(txId)}`),
+  recentTxs: (limit = 20, page = 1) =>
+    getJson<RecentTxResponse>(`/api/txs/recent?limit=${limit}&page=${page}`),
   recentCompute: (limit = 10) =>
     getJson<RecentComputeResponse>(`/api/compute/recent?limit=${limit}`),
   hotAddresses: (limit = 10) =>

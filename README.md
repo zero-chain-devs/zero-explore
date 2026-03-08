@@ -48,10 +48,17 @@ cd /root/workspaces/blockchain/zero-explore
 - `GET /health`
 - `GET /api/network/health`
 - `GET /api/network/stats`
+- `GET /api/overview`
 - `GET /api/blocks`
 - `GET /api/blocks/range`
 - `GET /api/blocks/:number`
 - `GET /api/accounts/:address`
+- `GET /api/accounts/:address/blocks`
+- `GET /api/miners`
+- `GET /api/miners/:address`
+- `GET /api/txs/recent`
+- `GET /api/activity/hot-addresses`
+- `GET /api/compute/recent`
 - `GET /api/compute/:tx_id`
 - `GET /api/tx/:tx_id`
 - `GET /api/objects/:object_id`
@@ -59,3 +66,10 @@ cd /root/workspaces/blockchain/zero-explore
 - `GET /api/domains/:domain_id`
 - `GET /api/search/:query`
 
+## 新增能力（对齐 Etherscan 常用视图）
+
+- 历史区块查询：后端已切换到链上 `zero_getBlockByNumber / zero_getBlocksRange`，不再只看 latest block。
+- 统计总览：`/api/overview` 聚合链高、24h 出块、平均出块间隔、活跃矿工与最近计算交易总量。
+- 矿工视图：`/api/miners` 与 `/api/miners/:address` 支持矿工榜单和单矿工出块明细。
+- 地址出块视图：`/api/accounts/:address/blocks` 可直接查看地址在窗口内的出块记录。
+- 最近交易视图：`/api/txs/recent` 基于链上 `zero_listComputeTxResults` 返回分页结果。

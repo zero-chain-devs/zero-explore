@@ -104,3 +104,66 @@ export type HotAddressItem = {
 export type HotAddressResponse = {
   items: HotAddressItem[];
 };
+
+export type MinerStatsItem = {
+  address: string;
+  blocks_mined: number;
+  first_block: number;
+  last_block: number;
+  last_seen_unix: number;
+  share_of_window: number;
+};
+
+export type MinerStatsResponse = {
+  latest_block: number;
+  lookback_blocks: number;
+  unique_miners: number;
+  items: MinerStatsItem[];
+};
+
+export type MinerDetailResponse = {
+  miner: MinerStatsItem;
+  page: number;
+  limit: number;
+  total_blocks: number;
+  blocks: ExplorerBlock[];
+};
+
+export type AddressBlocksResponse = {
+  address: string;
+  page: number;
+  limit: number;
+  total_blocks: number;
+  items: ExplorerBlock[];
+};
+
+export type OverviewResponse = {
+  chain_id: string;
+  network_id: string;
+  latest_block_number: number;
+  indexed_blocks: number;
+  unique_miners: number;
+  block_24h: number;
+  avg_block_interval_secs: number;
+  recent_compute_txs: number;
+  top_miners: MinerStatsItem[];
+};
+
+export type RecentTxItem = {
+  tx_id: string;
+  result: {
+    ok?: boolean;
+    duplicate?: boolean;
+    consumed_inputs?: number;
+    read_objects?: number;
+    created_outputs?: number;
+  };
+};
+
+export type RecentTxResponse = {
+  page: number;
+  limit: number;
+  total: number;
+  has_more: boolean;
+  items: RecentTxItem[];
+};
