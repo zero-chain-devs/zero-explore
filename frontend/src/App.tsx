@@ -292,6 +292,7 @@ function HomePage() {
   const aliveRef = useRef(true);
 
   useEffect(() => {
+    aliveRef.current = true;
     return () => {
       aliveRef.current = false;
     };
@@ -1223,6 +1224,7 @@ export function App() {
   const aliveRef = useRef(true);
 
   useEffect(() => {
+    aliveRef.current = true;
     return () => {
       aliveRef.current = false;
     };
