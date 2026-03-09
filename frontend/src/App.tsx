@@ -2,6 +2,7 @@ import { FormEvent, Fragment, useEffect, useMemo, useRef, useState } from "react
 import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { api } from "./api";
 import { CopyButton, HexOrEmpty, Section, Shell, shortenHash } from "./components";
+import { useLatestAsyncEffect } from "./hooks/useLatestAsyncEffect";
 import { usePolling } from "./hooks/usePolling";
 import {
   classifyError,
@@ -480,12 +481,19 @@ function BlocksPage() {
   const [rangeFrom, setRangeFrom] = useState("0");
   const [rangeTo, setRangeTo] = useState("0");
 
-  useEffect(() => {
-    if (rangeMode) return;
-    api.blocks(20, page)
-      .then(setBlocks)
-      .catch((e) => setError((e as Error).message));
-  }, [page, rangeMode]);
+  useLatestAsyncEffect(
+    () => api.blocks(20, page),
+    [page, rangeMode],
+    {
+      enabled: !rangeMode,
+      reset: () => {
+        setBlocks(null);
+        setError("");
+      },
+      onSuccess: setBlocks,
+      onError: (e) => setError((e as Error).message),
+    },
+  );
 
   const applyRange = async () => {
     const from = Number(rangeFrom);
@@ -575,15 +583,22 @@ function BlockDetailPage() {
   const [payload, setPayload] = useState<{ source: string; block: unknown } | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!number) return;
-    api.blockByNumber(number)
-      .then(setPayload)
-      .catch((e) => {
+  useLatestAsyncEffect(
+    () => api.blockByNumber(number!),
+    [number],
+    {
+      enabled: Boolean(number),
+      reset: () => {
+        setPayload(null);
+        setError("");
+      },
+      onSuccess: setPayload,
+      onError: (e) => {
         const classified = classifyError(e);
         setError(`[${classified.code}] ${classified.message}`);
-      });
-  }, [number]);
+      },
+    },
+  );
 
   const blockObj = (payload?.block ?? null) as Record<string, unknown> | null;
 
@@ -623,38 +638,28 @@ function AccountPage() {
   const [txs, setTxs] = useState<RecentTxResponse | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!address) {
-      setData(null);
-      setMinedBlocks(null);
-      setTxs(null);
-      setError("");
-      return;
-    }
-
-    let cancelled = false;
-    setData(null);
-    setMinedBlocks(null);
-    setTxs(null);
-    setError("");
-
-    Promise.all([api.account(address), api.accountBlocks(address, 20, 1), api.accountTxs(address, 20, 1)])
-      .then(([overview, blocks, txList]) => {
-        if (cancelled) return;
+  useLatestAsyncEffect(
+    () => Promise.all([api.account(address!), api.accountBlocks(address!, 20, 1), api.accountTxs(address!, 20, 1)]),
+    [address],
+    {
+      enabled: Boolean(address),
+      reset: () => {
+        setData(null);
+        setMinedBlocks(null);
+        setTxs(null);
+        setError("");
+      },
+      onSuccess: ([overview, blocks, txList]) => {
         setData(overview);
         setMinedBlocks(blocks);
         setTxs(txList);
-      })
-      .catch((e) => {
-        if (cancelled) return;
+      },
+      onError: (e) => {
         const classified = classifyError(e);
         setError(`[${classified.code}] ${classified.message}`);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [address]);
+      },
+    },
+  );
 
   return (
     <>
@@ -749,15 +754,22 @@ function ComputeTxPage() {
   const [data, setData] = useState<ComputeTxResultView | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!txId) return;
-    api.computeResult(txId)
-      .then(setData)
-      .catch((e) => {
+  useLatestAsyncEffect(
+    () => api.computeResult(txId!),
+    [txId],
+    {
+      enabled: Boolean(txId),
+      reset: () => {
+        setData(null);
+        setError("");
+      },
+      onSuccess: setData,
+      onError: (e) => {
         const classified = classifyError(e);
         setError(`[${classified.code}] ${classified.message}`);
-      });
-  }, [txId]);
+      },
+    },
+  );
 
   const resultObj = (data?.result ?? null) as Record<string, unknown> | null;
 
@@ -793,15 +805,22 @@ function TxAliasPage() {
   const [data, setData] = useState<ComputeTxResultView | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!txId) return;
-    api.txDetail(txId)
-      .then(setData)
-      .catch((e) => {
+  useLatestAsyncEffect(
+    () => api.txDetail(txId!),
+    [txId],
+    {
+      enabled: Boolean(txId),
+      reset: () => {
+        setData(null);
+        setError("");
+      },
+      onSuccess: setData,
+      onError: (e) => {
         const classified = classifyError(e);
         setError(`[${classified.code}] ${classified.message}`);
-      });
-  }, [txId]);
+      },
+    },
+  );
 
   return (
     <>
@@ -824,15 +843,22 @@ function ObjectPage() {
   const [data, setData] = useState<ObjectOutputView | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!objectId) return;
-    api.object(objectId)
-      .then(setData)
-      .catch((e) => {
+  useLatestAsyncEffect(
+    () => api.object(objectId!),
+    [objectId],
+    {
+      enabled: Boolean(objectId),
+      reset: () => {
+        setData(null);
+        setError("");
+      },
+      onSuccess: setData,
+      onError: (e) => {
         const classified = classifyError(e);
         setError(`[${classified.code}] ${classified.message}`);
-      });
-  }, [objectId]);
+      },
+    },
+  );
 
   const valueObj = objectEntries(data?.value);
 
@@ -873,15 +899,22 @@ function OutputPage() {
   const [data, setData] = useState<ObjectOutputView | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!outputId) return;
-    api.output(outputId)
-      .then(setData)
-      .catch((e) => {
+  useLatestAsyncEffect(
+    () => api.output(outputId!),
+    [outputId],
+    {
+      enabled: Boolean(outputId),
+      reset: () => {
+        setData(null);
+        setError("");
+      },
+      onSuccess: setData,
+      onError: (e) => {
         const classified = classifyError(e);
         setError(`[${classified.code}] ${classified.message}`);
-      });
-  }, [outputId]);
+      },
+    },
+  );
 
   const valueObj = objectEntries(data?.value);
 
@@ -922,15 +955,22 @@ function DomainPage() {
   const [data, setData] = useState<unknown>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!domainId) return;
-    api.domain(domainId)
-      .then(setData)
-      .catch((e) => {
+  useLatestAsyncEffect(
+    () => api.domain(domainId!),
+    [domainId],
+    {
+      enabled: Boolean(domainId),
+      reset: () => {
+        setData(null);
+        setError("");
+      },
+      onSuccess: setData,
+      onError: (e) => {
         const classified = classifyError(e);
         setError(`[${classified.code}] ${classified.message}`);
-      });
-  }, [domainId]);
+      },
+    },
+  );
 
   const obj = (data ?? null) as Record<string, unknown> | null;
 
@@ -957,14 +997,21 @@ function TxsPage() {
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
 
-  useEffect(() => {
-    api.recentTxs(20, page)
-      .then(setData)
-      .catch((e) => {
+  useLatestAsyncEffect(
+    () => api.recentTxs(20, page),
+    [page],
+    {
+      reset: () => {
+        setData(null);
+        setError("");
+      },
+      onSuccess: setData,
+      onError: (e) => {
         const classified = classifyError(e);
         setError(`[${classified.code}] ${classified.message}`);
-      });
-  }, [page]);
+      },
+    },
+  );
 
   return (
     <>
@@ -1025,16 +1072,25 @@ function MinersPage() {
   const [error, setError] = useState("");
   const [lookback, setLookback] = useState("2000");
 
-  useEffect(() => {
-    const parsed = Number(lookback);
-    const value = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 2000;
-    api.miners(value, 200)
-      .then(setData)
-      .catch((e) => {
+  useLatestAsyncEffect(
+    () => {
+      const parsed = Number(lookback);
+      const value = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 2000;
+      return api.miners(value, 200);
+    },
+    [lookback],
+    {
+      reset: () => {
+        setData(null);
+        setError("");
+      },
+      onSuccess: setData,
+      onError: (e) => {
         const classified = classifyError(e);
         setError(`[${classified.code}] ${classified.message}`);
-      });
-  }, [lookback]);
+      },
+    },
+  );
 
   return (
     <>
@@ -1063,15 +1119,22 @@ function MinerDetailPage() {
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
 
-  useEffect(() => {
-    if (!address) return;
-    api.minerDetail(address, 20, page)
-      .then(setData)
-      .catch((e) => {
+  useLatestAsyncEffect(
+    () => api.minerDetail(address!, 20, page),
+    [address, page],
+    {
+      enabled: Boolean(address),
+      reset: () => {
+        setData(null);
+        setError("");
+      },
+      onSuccess: setData,
+      onError: (e) => {
         const classified = classifyError(e);
         setError(`[${classified.code}] ${classified.message}`);
-      });
-  }, [address, page]);
+      },
+    },
+  );
 
   return (
     <>
@@ -1132,32 +1195,22 @@ function SearchResultPage() {
   const [data, setData] = useState<SearchResponse | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!query) {
-      setData(null);
-      setError("");
-      return;
-    }
-
-    let cancelled = false;
-    setData(null);
-    setError("");
-
-    api.search(query)
-      .then((v) => {
-        if (cancelled) return;
-        setData(v);
-      })
-      .catch((e) => {
-        if (cancelled) return;
+  useLatestAsyncEffect(
+    () => api.search(query!),
+    [query],
+    {
+      enabled: Boolean(query),
+      reset: () => {
+        setData(null);
+        setError("");
+      },
+      onSuccess: setData,
+      onError: (e) => {
         const classified = classifyError(e);
         setError(`[${classified.code}] ${classified.message}`);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [query]);
+      },
+    },
+  );
 
   const pretty = useMemo(() => JSON.stringify(data, null, 2), [data]);
 
