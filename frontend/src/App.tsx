@@ -624,17 +624,36 @@ function AccountPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!address) return;
+    if (!address) {
+      setData(null);
+      setMinedBlocks(null);
+      setTxs(null);
+      setError("");
+      return;
+    }
+
+    let cancelled = false;
+    setData(null);
+    setMinedBlocks(null);
+    setTxs(null);
+    setError("");
+
     Promise.all([api.account(address), api.accountBlocks(address, 20, 1), api.accountTxs(address, 20, 1)])
       .then(([overview, blocks, txList]) => {
+        if (cancelled) return;
         setData(overview);
         setMinedBlocks(blocks);
         setTxs(txList);
       })
       .catch((e) => {
+        if (cancelled) return;
         const classified = classifyError(e);
         setError(`[${classified.code}] ${classified.message}`);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [address]);
 
   return (
@@ -1114,15 +1133,30 @@ function SearchResultPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!query) return;
+    if (!query) {
+      setData(null);
+      setError("");
+      return;
+    }
+
+    let cancelled = false;
+    setData(null);
+    setError("");
+
     api.search(query)
       .then((v) => {
+        if (cancelled) return;
         setData(v);
       })
       .catch((e) => {
+        if (cancelled) return;
         const classified = classifyError(e);
         setError(`[${classified.code}] ${classified.message}`);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [query]);
 
   const pretty = useMemo(() => JSON.stringify(data, null, 2), [data]);
