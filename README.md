@@ -43,6 +43,34 @@ cd /root/workspaces/blockchain/zero-explore
 - `ZERO_EXPLORER_FRONTEND_DIST`：静态资源目录（默认 `frontend/dist`）
 - `ZERO_EXPLORER_STATE_FILE`：浏览器状态持久化文件路径
 
+## 前端 Playwright 巡检（Mock API）
+
+在 `frontend` 目录下可以执行一键 QA：
+
+```bash
+cd /root/workspaces/blockchain/zero-explore/frontend
+npm run qa:pages
+```
+
+这条命令会自动完成：
+- `npm run build`
+- 启动本地 `vite preview`
+- 使用 Playwright 对以下内容做 mock API 巡检：
+  - `SearchResultPage` / `AccountPage` / `BlocksPage` / `BlockDetailPage` 的 stale-response 竞态
+  - `compute` / `tx` / `object` / `output` / `domain` / `txs` / `miners` / `miner-detail` 的详情页渲染
+
+默认输出目录：
+
+```bash
+output/playwright/frontend-smoke/
+```
+
+可通过环境变量自定义：
+
+```bash
+QA_OUTPUT_DIR=../output/playwright/custom-smoke npm run qa:pages
+```
+
 ## API 概览
 
 - `GET /health`

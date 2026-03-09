@@ -24,3 +24,6 @@ backend/data/
 
 # frontend tsbuildinfo
 frontend/*.tsbuildinfo
+
+# QA output
+output/
