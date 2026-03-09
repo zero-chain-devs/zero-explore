@@ -21,3 +21,6 @@ backend/data/
 
 # Logs
 *.log
+
+# frontend tsbuildinfo
+frontend/*.tsbuildinfo
