@@ -102,4 +102,4 @@ QA_OUTPUT_DIR=../output/playwright/custom-smoke npm run qa:pages
 - 矿工视图：`/api/miners` 与 `/api/miners/:address` 支持矿工榜单和单矿工出块明细。
 - 地址出块视图：`/api/accounts/:address/blocks` 可直接查看地址在窗口内的出块记录。
 - 地址交易视图：`/api/accounts/:address/txs` 支持地址转账历史分页查询。
-- 最近交易视图：`/api/txs/recent` 优先使用链上 `zero_listTransactions`（含 transfer + compute），旧节点自动回退。
+- 最近交易视图：`/api/txs/recent` 使用链上 `zero_listTransactions`（含 transfer + compute）。若节点不支持该 RPC，将直接返回 `rpc_error`（fail-fast）。

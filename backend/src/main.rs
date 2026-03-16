@@ -416,14 +416,15 @@ async fn network_stats(State(state): State<AppState>) -> Result<Json<NetworkStat
     let network_id: String = rpc_call_str(&state, "net_version", vec![]).await?;
     let chain_id = network_id.clone();
 
-    let latest_zero_block = rpc_call_value(&state, "zero_getLatestBlock", vec![])
-        .await
-        .unwrap_or(Value::Null);
+    let latest_zero_block = rpc_call_value(&state, "zero_getLatestBlock", vec![]).await?;
     let latest_block_number = latest_zero_block
         .get("number")
         .and_then(Value::as_str)
         .and_then(parse_u64_hex)
-        .unwrap_or(0);
+        .ok_or(ApiError {
+            code: "rpc_error",
+            message: "rpc zero_getLatestBlock returned invalid block number".to_string(),
+        })?;
     let mining = rpc_call_value(&state, "zero_getWork", vec![]).await.is_ok();
     let hashrate = "0x0".to_string();
     let gas_price = "0x0".to_string();
@@ -431,7 +432,10 @@ async fn network_stats(State(state): State<AppState>) -> Result<Json<NetworkStat
         .get("coinbase")
         .and_then(Value::as_str)
         .and_then(canonicalize_observed_address)
-        .unwrap_or_else(|| "ZER0x0000000000000000000000000000000000000000".to_string());
+        .ok_or(ApiError {
+            code: "rpc_error",
+            message: "rpc zero_getLatestBlock returned invalid coinbase".to_string(),
+        })?;
 
     let stats = NetworkStats {
         chain_id,
@@ -561,7 +565,10 @@ async fn get_block_by_number(
     Path(number): Path<String>,
 ) -> Result<Json<Value>, ApiError> {
     let number_hex = normalize_number_param(&number)?;
-    let req_num = parse_u64_hex(&number_hex).unwrap_or(0);
+    let req_num = parse_u64_hex(&number_hex).ok_or(ApiError {
+        code: "bad_request",
+        message: format!("invalid block number: {number}"),
+    })?;
 
     if let Some(block) = fetch_block_by_number_best_effort(&state, req_num).await? {
         return Ok(Json(
@@ -591,36 +598,39 @@ async fn get_account_overview(
         "zero_getAccount",
         vec![Value::String(normalized_address.clone())],
     )
-    .await
-    .unwrap_or(Value::Null);
+    .await?;
 
     let utxos = rpc_call_value(
         &state,
         "zero_getUtxos",
         vec![Value::String(normalized_address.clone())],
     )
-    .await
-    .unwrap_or(Value::Array(vec![]));
+    .await?;
 
     record_address_hit(&state, &normalized_address).await;
 
+    let balance_hex = account_val
+        .get("balance")
+        .and_then(Value::as_str)
+        .ok_or(ApiError {
+            code: "rpc_error",
+            message: "rpc zero_getAccount returned invalid balance".to_string(),
+        })?
+        .to_string();
+    let nonce_hex = account_val
+        .get("nonce")
+        .and_then(Value::as_str)
+        .ok_or(ApiError {
+            code: "rpc_error",
+            message: "rpc zero_getAccount returned invalid nonce".to_string(),
+        })?
+        .to_string();
+
     Ok(Json(AccountOverview {
         address: normalized_address,
-        balance_hex: account_val
-            .get("balance")
-            .and_then(Value::as_str)
-            .unwrap_or("0x0")
-            .to_string(),
-        nonce_hex: account_val
-            .get("nonce")
-            .and_then(Value::as_str)
-            .unwrap_or("0x0")
-            .to_string(),
-        tx_count_hex: account_val
-            .get("nonce")
-            .and_then(Value::as_str)
-            .unwrap_or("0x0")
-            .to_string(),
+        balance_hex: balance_hex.clone(),
+        nonce_hex: nonce_hex.clone(),
+        tx_count_hex: nonce_hex,
         utxos,
     }))
 }
@@ -718,10 +728,13 @@ async fn get_overview(State(state): State<AppState>) -> Result<Json<OverviewResp
         "zero_listComputeTxResults",
         vec![json!({"page": 1, "limit": 1})],
     )
-    .await
-    .ok()
-    .and_then(|v| v.get("total").and_then(Value::as_u64))
-    .unwrap_or(0);
+    .await?
+    .get("total")
+    .and_then(Value::as_u64)
+    .ok_or(ApiError {
+        code: "rpc_error",
+        message: "rpc zero_listComputeTxResults returned invalid total".to_string(),
+    })?;
 
     Ok(Json(OverviewResponse {
         chain_id: stats.chain_id,
@@ -854,8 +867,7 @@ async fn get_tx_detail(
         "zero_getTransactionByHash",
         vec![Value::String(tx_id.clone())],
     )
-    .await
-    .unwrap_or(Value::Null);
+    .await?;
     if !tx_detail.is_null() {
         return Ok(Json(ComputeTxResultView {
             tx_id,
@@ -1042,9 +1054,8 @@ async fn search(
             }));
         }
 
-        let domain = rpc_call_value(&state, "zero_getDomain", vec![Value::Number(n.into())])
-            .await
-            .unwrap_or(Value::Null);
+        let domain =
+            rpc_call_value(&state, "zero_getDomain", vec![Value::Number(n.into())]).await?;
         if !domain.is_null() {
             return Ok(Json(SearchResponse {
                 kind: "domain".to_string(),
@@ -1072,8 +1083,7 @@ async fn search(
             "zero_getTransactionByHash",
             vec![Value::String(query.clone())],
         )
-        .await
-        .unwrap_or(Value::Null);
+        .await?;
         if !tx.is_null() {
             return Ok(Json(SearchResponse {
                 kind: "tx".to_string(),
@@ -1088,8 +1098,7 @@ async fn search(
             "zero_getComputeTxResult",
             vec![Value::String(query.clone())],
         )
-        .await
-        .unwrap_or(Value::Null);
+        .await?;
         if !compute.is_null() {
             record_compute_observation(
                 &state,
@@ -1105,9 +1114,8 @@ async fn search(
             }));
         }
 
-        let object = rpc_call_value(&state, "zero_getObject", vec![Value::String(query.clone())])
-            .await
-            .unwrap_or(Value::Null);
+        let object =
+            rpc_call_value(&state, "zero_getObject", vec![Value::String(query.clone())]).await?;
         if !object.is_null() {
             return Ok(Json(SearchResponse {
                 kind: "object".to_string(),
@@ -1117,9 +1125,8 @@ async fn search(
             }));
         }
 
-        let output = rpc_call_value(&state, "zero_getOutput", vec![Value::String(query.clone())])
-            .await
-            .unwrap_or(Value::Null);
+        let output =
+            rpc_call_value(&state, "zero_getOutput", vec![Value::String(query.clone())]).await?;
         if !output.is_null() {
             return Ok(Json(SearchResponse {
                 kind: "output".to_string(),
@@ -1473,11 +1480,17 @@ fn parse_zero_block(v: &Value) -> Option<ExplorerBlock> {
 
 async fn latest_block_number(state: &AppState) -> Result<u64, ApiError> {
     let latest = rpc_call_value(state, "zero_getLatestBlock", vec![]).await?;
-    Ok(latest
+    let number_hex = latest
         .get("number")
         .and_then(Value::as_str)
-        .and_then(parse_u64_hex)
-        .unwrap_or(0))
+        .ok_or(ApiError {
+            code: "rpc_error",
+            message: "rpc zero_getLatestBlock missing block number".to_string(),
+        })?;
+    parse_u64_hex(number_hex).ok_or(ApiError {
+        code: "rpc_error",
+        message: format!("rpc zero_getLatestBlock returned invalid number: {number_hex}"),
+    })
 }
 
 fn normalize_supported_address(value: &str) -> Option<String> {
@@ -1673,10 +1686,7 @@ mod tests {
 
         assert_eq!(block.number, 5);
         assert_eq!(block.tx_count, 3);
-        assert_eq!(
-            block.miner,
-            "ZER0x0000000000000000000000000000000000000000"
-        );
+        assert_eq!(block.miner, "ZER0x0000000000000000000000000000000000000000");
     }
 
     #[test]
