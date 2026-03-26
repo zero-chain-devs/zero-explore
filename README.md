@@ -101,5 +101,5 @@ QA_OUTPUT_DIR=../output/playwright/custom-smoke npm run qa:pages
 - 统计总览：`/api/overview` 聚合链高、24h 出块、平均出块间隔、活跃矿工与最近计算交易总量。
 - 矿工视图：`/api/miners` 与 `/api/miners/:address` 支持矿工榜单和单矿工出块明细。
 - 地址出块视图：`/api/accounts/:address/blocks` 可直接查看地址在窗口内的出块记录。
-- 地址交易视图：`/api/accounts/:address/txs` 支持地址转账历史分页查询。
-- 最近交易视图：`/api/txs/recent` 使用链上 `zero_listTransactions`（含 transfer + compute）。若节点不支持该 RPC，将直接返回 `rpc_error`（fail-fast）。
+- 地址交易视图：`/api/accounts/:address/txs` 当前会透传链上 `unsupported` 状态，等待 compute-only 地址索引补齐。
+- 最近交易视图：`/api/txs/recent` 使用链上 `zero_listTransactions`（compute-only）。若节点不支持该 RPC，将直接返回 `rpc_error`（fail-fast）。
