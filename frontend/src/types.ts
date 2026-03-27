@@ -18,6 +18,15 @@ export type NetworkHealth = {
   detail: string;
 };
 
+export type EndpointProbe = {
+  path: string;
+  ok: boolean;
+  status: number | null;
+  latency_ms: number;
+  checked_at_unix: number;
+  detail: string;
+};
+
 export type ExplorerBlock = {
   number: number;
   number_hex: string;

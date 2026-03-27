@@ -62,6 +62,7 @@ export function Shell({
                   <Link to="/domains/0">Domain Lookup</Link>
                   <Link to="/search/object">Object Lookup</Link>
                   <Link to="/search/output">Output Lookup</Link>
+                  <Link to="/telemetry">OpenTelemetry</Link>
                 </div>
               </div>
             </nav>

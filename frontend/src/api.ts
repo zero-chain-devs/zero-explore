@@ -12,6 +12,7 @@ import {
   NetworkStats,
   ObjectOutputView,
   OverviewResponse,
+  EndpointProbe,
   RecentComputeResponse,
   RecentTxResponse,
   SearchResponse,
@@ -143,4 +144,32 @@ export const api = {
   search: (query: string) =>
     getJson<SearchResponse>(`/api/search/${encodeURIComponent(query)}`),
   debugCache: () => getJson<CacheDebugResponse>("/api/debug/cache"),
+  endpointProbe: async (path: string): Promise<EndpointProbe> => {
+    const started = Date.now();
+    const requestUrl = withBase(path);
+    const checkedAt = Math.floor(started / 1000);
+    try {
+      const res = await fetchWithTimeout(requestUrl);
+      const latency = Date.now() - started;
+      const text = await res.text().catch(() => "");
+      return {
+        path,
+        ok: res.ok,
+        status: res.status,
+        latency_ms: latency,
+        checked_at_unix: checkedAt,
+        detail: res.ok ? "ok" : `${res.status} ${text || res.statusText}`.slice(0, 220),
+      };
+    } catch (err) {
+      const latency = Date.now() - started;
+      return {
+        path,
+        ok: false,
+        status: null,
+        latency_ms: latency,
+        checked_at_unix: checkedAt,
+        detail: (err as Error)?.message ?? "request failed",
+      };
+    }
+  },
 };

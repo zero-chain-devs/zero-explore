@@ -30,6 +30,7 @@ import {
   NetworkStats,
   ObjectOutputView,
   OverviewResponse,
+  EndpointProbe,
   RecentComputeItem,
   RecentComputeResponse,
   RecentTxResponse,
@@ -1113,6 +1114,146 @@ function MinersPage() {
   );
 }
 
+const TELEMETRY_PROBE_PATHS = [
+  "/health",
+  "/api/network/health",
+  "/api/network/stats",
+  "/api/debug/cache",
+  "/api/overview",
+];
+
+function TelemetryPage() {
+  const [networkHealth, setNetworkHealth] = useState<NetworkHealth | null>(null);
+  const [networkStats, setNetworkStats] = useState<NetworkStats | null>(null);
+  const [cacheDebug, setCacheDebug] = useState<CacheDebugResponse | null>(null);
+  const [probes, setProbes] = useState<EndpointProbe[]>([]);
+  const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState<ErrorCode>("unknown");
+  const aliveRef = useRef(true);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
+  usePolling(async () => {
+    try {
+      const [health, stats, cache, nextProbes] = await Promise.all([
+        api.networkHealth(),
+        api.networkStats(),
+        api.debugCache(),
+        Promise.all(TELEMETRY_PROBE_PATHS.map((path) => api.endpointProbe(path))),
+      ]);
+      if (!aliveRef.current) return;
+      setNetworkHealth(health);
+      setNetworkStats(stats);
+      setCacheDebug(cache);
+      setProbes(nextProbes);
+      setError("");
+    } catch (e) {
+      if (!aliveRef.current) return;
+      const classified = classifyError(e);
+      setError(classified.message);
+      setErrorCode(classified.code);
+    }
+  }, 5000);
+
+  const telemetryRoot = import.meta.env.VITE_OTEL_ENDPOINT || import.meta.env.VITE_OTLP_ENDPOINT || "http://127.0.0.1:4317";
+
+  return (
+    <>
+      <SearchBar smartRedirect />
+      <Section title="OpenTelemetry Control Plane">
+        {error ? <div className="error">[{errorCode}] {error}</div> : null}
+        <div className="detail-grid">
+          <div className="k">Explorer Backend Health</div>
+          <div className="v">{networkHealth ? `${networkHealth.rpc_ok ? "RPC OK" : "RPC DOWN"} | latency=${networkHealth.rpc_latency_ms}ms` : "-"}</div>
+          <div className="k">Network</div>
+          <div className="v">{networkStats ? `chain_id=${networkStats.chain_id} network_id=${networkStats.network_id} latest_block=${networkStats.latest_block_number}` : "-"}</div>
+          <div className="k">Cache TTL</div>
+          <div className="v">{cacheDebug ? `${cacheDebug.ttl_secs}s` : "-"}</div>
+          <div className="k">OTLP Endpoint (target)</div>
+          <div className="v">{String(telemetryRoot)}</div>
+          <div className="k">Read API Base</div>
+          <div className="v">{import.meta.env.VITE_API_BASE || "(same-origin /api)"}</div>
+        </div>
+      </Section>
+
+      <Section title="Live Endpoint Probes">
+        <table className="table compact">
+          <thead>
+            <tr>
+              <th>Endpoint</th>
+              <th>Status</th>
+              <th>HTTP</th>
+              <th>Latency</th>
+              <th>Checked</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            {probes.map((probe) => (
+              <tr key={probe.path}>
+                <td><code>{probe.path}</code></td>
+                <td><span className={probe.ok ? "ok" : "bad"}>{probe.ok ? "OK" : "DOWN"}</span></td>
+                <td>{probe.status ?? "-"}</td>
+                <td>{probe.latency_ms} ms</td>
+                <td>{toDate(probe.checked_at_unix)}</td>
+                <td title={probe.detail} className="muted">{probe.detail || "-"}</td>
+              </tr>
+            ))}
+            {!probes.length ? (
+              <tr>
+                <td colSpan={6} className="muted">No probe data yet.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </Section>
+
+      <Section title="ZeroChain / Explorer / Node OTel Wiring">
+        <div className="telemetry-grid">
+          <article className="telemetry-card">
+            <h3>ZeroChain Node</h3>
+            <p>Enable exporter when running node process:</p>
+            <div className="json-box"><pre>{`zerochain --otel-enabled --otel-endpoint http://127.0.0.1:4317 run --network mainnet`}</pre></div>
+            <p className="muted">This enables tracing export from CLI runtime and node services.</p>
+          </article>
+          <article className="telemetry-card">
+            <h3>Explorer Backend</h3>
+            <p>Current backend exposes health + debug APIs used by this page:</p>
+            <div className="json-box"><pre>{`/health
+/api/network/health
+/api/network/stats
+/api/debug/cache`}</pre></div>
+            <p className="muted">No fake metric stream here; cards above only show real probe and API state.</p>
+          </article>
+          <article className="telemetry-card">
+            <h3>Collector / UI</h3>
+            <p>Recommended local endpoint and common UI ports:</p>
+            <div className="json-box"><pre>{`OTLP gRPC: http://127.0.0.1:4317
+OTLP HTTP: http://127.0.0.1:4318
+Jaeger UI:  http://127.0.0.1:16686
+Grafana:    http://127.0.0.1:3000`}</pre></div>
+            <p className="muted">Set Vite env for docs display: <code>VITE_OTEL_ENDPOINT</code> / <code>VITE_OTLP_ENDPOINT</code>.</p>
+          </article>
+        </div>
+      </Section>
+
+      <Section title="Verification Playbook">
+        <ol className="telemetry-steps">
+          <li>Start collector (OTLP on <code>4317/4318</code>), then start <code>zerochain</code> with <code>--otel-enabled</code>.</li>
+          <li>Load explorer and open this page. Confirm probe rows stay green for backend endpoints.</li>
+          <li>Execute one real action: submit compute tx or mine a block, then check trace backend for new spans.</li>
+          <li>Use <code>/api/debug/cache</code> freshness counters to verify backend poll loop is active.</li>
+        </ol>
+      </Section>
+    </>
+  );
+}
+
 function MinerDetailPage() {
   const { address } = useParams();
   const [data, setData] = useState<MinerDetailResponse | null>(null);
@@ -1300,6 +1441,7 @@ function SearchBar({ defaultValue, smartRedirect = false }: { defaultValue?: str
         <Link to="/blocks">Blocks</Link>
         <Link to="/txs">Transactions</Link>
         <Link to="/miners">Miners</Link>
+        <Link to="/telemetry">Telemetry</Link>
         <Link to="/domains/0">Domain #0</Link>
       </div>
     </>
@@ -1348,6 +1490,7 @@ export function App() {
         <Route path="/txs" element={<TxsPage />} />
         <Route path="/miners" element={<MinersPage />} />
         <Route path="/miners/:address" element={<MinerDetailPage />} />
+        <Route path="/telemetry" element={<TelemetryPage />} />
         <Route path="/tx/:txId" element={<TxAliasPage />} />
         <Route path="/compute/:txId" element={<ComputeTxPage />} />
         <Route path="/objects/:objectId" element={<ObjectPage />} />
