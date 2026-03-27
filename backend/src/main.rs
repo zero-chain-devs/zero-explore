@@ -327,6 +327,7 @@ async fn main() -> Result<()> {
         .route("/api/network/stats", get(network_stats))
         .route("/api/overview", get(get_overview))
         .route("/api/blocks", get(list_blocks))
+        .route("/api/blocks/recent", get(list_recent_blocks))
         .route("/api/blocks/range", get(list_blocks_range))
         .route("/api/blocks/:number", get(get_block_by_number))
         .route("/api/accounts/:address", get(get_account_overview))
@@ -511,6 +512,13 @@ async fn list_blocks(
     }
 
     Ok(Json(response))
+}
+
+async fn list_recent_blocks(
+    state: State<AppState>,
+    query: Query<Pagination>,
+) -> Result<Json<BlockListResponse>, ApiError> {
+    list_blocks(state, query).await
 }
 
 async fn list_blocks_range(
@@ -1777,6 +1785,11 @@ mod tests {
         assert_eq!(normalize_number_param("0xa").unwrap(), "0xa");
         let err = normalize_number_param("latest").expect_err("invalid decimal should fail");
         assert_eq!(err.code, "bad_request");
+    }
+
+    #[test]
+    fn test_recent_blocks_route_is_not_parsed_as_number() {
+        assert!(normalize_number_param("recent").is_err());
     }
 
     #[test]
