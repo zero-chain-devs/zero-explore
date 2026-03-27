@@ -686,7 +686,7 @@ async fn list_account_txs(
     let limit = query.limit.unwrap_or(20).clamp(1, 200);
     let result = rpc_call_value(
         &state,
-        "zero_getTransactionsByAddress",
+        "zero_getOperationsByAddress",
         vec![json!({
             "address": address,
             "page": page,
@@ -840,7 +840,7 @@ async fn list_recent_txs(
     let limit = query.limit.unwrap_or(20).clamp(1, 200);
     let result = rpc_call_value(
         &state,
-        "zero_listTransactions",
+        "zero_listOperations",
         vec![json!({
             "page": page,
             "limit": limit,
@@ -864,7 +864,7 @@ async fn get_tx_detail(
 
     let tx_detail = rpc_call_value(
         &state,
-        "zero_getTransactionByHash",
+        "zero_getOperationByHash",
         vec![Value::String(tx_id.clone())],
     )
     .await?;
@@ -1080,7 +1080,7 @@ async fn search(
     if is_hex_32(&query) {
         let tx = rpc_call_value(
             &state,
-            "zero_getTransactionByHash",
+            "zero_getOperationByHash",
             vec![Value::String(query.clone())],
         )
         .await?;
