@@ -394,7 +394,7 @@ function HomePage() {
           <div className="home-panel-head">
             <h3>Latest Compute Operations</h3>
             <div className="head-tools">
-              <div className="segment" role="tablist" aria-label="transactions window">
+              <div className="segment" role="tablist" aria-label="operations window">
                 <button
                   className={`segment-btn ${txWindow === "latest" ? "active" : ""}`}
                   type="button"
@@ -1026,7 +1026,7 @@ function TxsPage() {
         <table className="table">
           <thead>
             <tr>
-              <th>Tx</th>
+              <th>Operation</th>
               <th>Kind</th>
               <th>From</th>
               <th>To</th>
