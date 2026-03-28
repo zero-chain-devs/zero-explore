@@ -43,10 +43,10 @@ export function Shell({
                 </div>
               </div>
               <div className="nav-item has-menu">
-                <Link to="/search/tx">Transactions ▾</Link>
+                <Link to="/search/tx">Operations ▾</Link>
                 <div className="nav-menu">
-                  <Link to="/search/tx">Search Transactions</Link>
-                  <Link to="/compute/0x0">Compute Tx Viewer</Link>
+                  <Link to="/search/tx">Search Operations</Link>
+                  <Link to="/compute/0x0">Compute Operation Viewer</Link>
                 </div>
               </div>
               <div className="nav-item has-menu">

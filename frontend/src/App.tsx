@@ -353,7 +353,7 @@ function HomePage() {
           <div className="v">
             {overview ? `${overview.avg_block_interval_secs.toFixed(2)}s` : "-"}
           </div>
-          <div className="k">Recent Compute Txs</div>
+          <div className="k">Recent Compute Operations</div>
           <div className="v">{overview?.recent_compute_txs ?? "-"}</div>
         </div>
       </Section>
@@ -379,7 +379,9 @@ function HomePage() {
                   All
                 </button>
               </div>
-              <button className="tiny-btn" type="button">Customize</button>
+              <button className="tiny-btn" type="button" disabled title="Current dashboard layout is fixed">
+                Fixed Layout
+              </button>
             </div>
           </div>
           <HomeBlockRows items={blockWindow === "latest" ? (blocks?.items ?? []).slice(0, 6) : (blocks?.items ?? [])} />
@@ -390,7 +392,7 @@ function HomePage() {
 
         <article className="home-panel">
           <div className="home-panel-head">
-            <h3>Latest Transactions</h3>
+            <h3>Latest Compute Operations</h3>
             <div className="head-tools">
               <div className="segment" role="tablist" aria-label="transactions window">
                 <button
@@ -408,12 +410,14 @@ function HomePage() {
                   All
                 </button>
               </div>
-              <button className="tiny-btn" type="button">Customize</button>
+              <button className="tiny-btn" type="button" disabled title="Current dashboard layout is fixed">
+                Fixed Layout
+              </button>
             </div>
           </div>
           <HomeTxRows items={txWindow === "latest" ? (recentCompute?.items ?? []).slice(0, 6) : (recentCompute?.items ?? [])} />
           <div className="row-end">
-            <Link to="/txs">VIEW ALL TRANSACTIONS →</Link>
+            <Link to="/txs">VIEW ALL OPERATIONS →</Link>
           </div>
         </article>
       </div>
@@ -1017,7 +1021,7 @@ function TxsPage() {
   return (
     <>
       <SearchBar smartRedirect />
-      <Section title="Recent Transactions">
+      <Section title="Recent Operations">
         {error ? <div className="error">{error}</div> : null}
         <table className="table">
           <thead>
@@ -1049,7 +1053,7 @@ function TxsPage() {
             ))}
             {!(data?.items.length ?? 0) ? (
               <tr>
-                <td colSpan={7} className="muted">No transactions yet.</td>
+                <td colSpan={7} className="muted">No operations yet.</td>
               </tr>
             ) : null}
           </tbody>
