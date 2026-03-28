@@ -415,6 +415,9 @@ function HomePage() {
               </button>
             </div>
           </div>
+          <p className="muted" style={{ margin: "0 0 10px" }}>
+            Derived from explorer activity observations and recent compute result polling, not a full historical operation index.
+          </p>
           <HomeTxRows items={txWindow === "latest" ? (recentCompute?.items ?? []).slice(0, 6) : (recentCompute?.items ?? [])} />
           <div className="row-end">
             <Link to="/txs">VIEW ALL OPERATIONS →</Link>
@@ -423,6 +426,9 @@ function HomePage() {
       </div>
 
       <Section title="Hot Addresses">
+        <p className="muted" style={{ margin: "0 0 10px" }}>
+          Ranked from explorer-side address hit tracking. This is a hot list for the current observation window, not a canonical on-chain leaderboard.
+        </p>
         <table className="table compact">
           <thead>
             <tr>
