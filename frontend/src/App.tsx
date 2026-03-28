@@ -358,6 +358,17 @@ function HomePage() {
         </div>
       </Section>
 
+      <Section title="Observation Sources">
+        <div className="status-chip-row">
+          <span className="status-chip tracked">activity-tracked</span>
+          <span className="status-chip polled">polled RPC</span>
+          <span className="status-chip cached">cached response</span>
+        </div>
+        <p className="muted" style={{ margin: "0" }}>
+          Home metrics combine direct RPC polling, explorer-side activity tracking, and backend cache snapshots.
+        </p>
+      </Section>
+
       <div className="home-twin">
         <article className="home-panel">
           <div className="home-panel-head">
