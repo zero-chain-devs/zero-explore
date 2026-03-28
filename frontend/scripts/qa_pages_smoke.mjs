@@ -250,12 +250,12 @@ async function runDetailChecks(page, results) {
   });
 
   const checks = [
-    { key: 'compute', url: `${BASE_URL}/compute/${hash64('c')}`, expect: ['Compute Tx Result', hash64('c')] },
-    { key: 'tx', url: `${BASE_URL}/tx/${hash64('b')}`, expect: ['Tx', hash64('b')] },
+    { key: 'compute', url: `${BASE_URL}/compute/${hash64('c')}`, expect: ['Compute Operation Result', hash64('c')] },
+    { key: 'tx', url: `${BASE_URL}/tx/${hash64('b')}`, expect: ['Operation', hash64('b')] },
     { key: 'object', url: `${BASE_URL}/objects/${hash64('e')}`, expect: ['Object (zero_getObject)', hash64('e')] },
     { key: 'output', url: `${BASE_URL}/outputs/${hash64('f')}`, expect: ['Output (zero_getOutput)', hash64('f')] },
     { key: 'domain', url: `${BASE_URL}/domains/7`, expect: ['Domain (zero_getDomain)', 'main'] },
-    { key: 'txs', url: `${BASE_URL}/txs`, expect: ['Recent Transactions', 'transfer'] },
+    { key: 'txs', url: `${BASE_URL}/txs`, expect: ['Recent Operations', 'transfer'] },
     { key: 'miners', url: `${BASE_URL}/miners`, expect: ['Miner Leaderboard', '90.00%', 'latest=9'] },
     { key: 'miner-detail', url: `${BASE_URL}/miners/${miner}`, expect: [`Miner ${miner}`, 'blocks_mined'] },
   ];

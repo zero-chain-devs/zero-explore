@@ -107,7 +107,7 @@ function HeroSearch({ smartRedirect = false }: { smartRedirect?: boolean }) {
               <option value="all">All Filters</option>
             </select>
             <input
-              placeholder="Search by Address / Txn Hash / Block / Object / Output / Domain"
+              placeholder="Search by Address / Operation Hash / Block / Object / Output / Domain"
               value={text}
               onChange={(e) => setText(e.target.value)}
             />
@@ -211,7 +211,7 @@ function HomeBlockRows({ items }: { items: ExplorerBlock[] }) {
             <div className="row-top">
               Miner <Link to={`/accounts/${b.miner}`}>{shortenHash(b.miner, 10)}</Link>
             </div>
-            <div className="row-sub">{b.tx_count} txns</div>
+            <div className="row-sub">{b.tx_count} ops</div>
           </div>
           <div className="amount-pill">{b.difficulty}</div>
         </div>
@@ -715,11 +715,11 @@ function AccountPage() {
         </table>
       </Section>
 
-      <Section title="Transactions (recent)">
+      <Section title="Operations (recent)">
         <table className="table compact">
           <thead>
             <tr>
-              <th>Tx</th>
+              <th>Operation</th>
               <th>Kind</th>
               <th>From</th>
               <th>To</th>
@@ -744,7 +744,7 @@ function AccountPage() {
             ))}
             {!(txs?.items.length ?? 0) ? (
               <tr>
-                <td colSpan={6} className="muted">No transactions found for this address.</td>
+                <td colSpan={6} className="muted">No operations found for this address.</td>
               </tr>
             ) : null}
           </tbody>
@@ -781,7 +781,7 @@ function ComputeTxPage() {
   return (
     <>
       <SearchBar smartRedirect />
-      <Section title="Compute Tx Result (zero_getComputeTxResult)">
+      <Section title="Compute Operation Result (zero_getComputeTxResult)">
         {error ? <div className="error">{error}</div> : null}
         {data ? (
           <>
@@ -830,8 +830,8 @@ function TxAliasPage() {
   return (
     <>
       <SearchBar smartRedirect />
-      <Section title={`Tx ${txId}`}>
-        <div className="muted">tx route currently resolves via backend /api/tx for forward compatibility.</div>
+      <Section title={`Operation ${txId}`}>
+        <div className="muted">operation route currently resolves via backend /api/tx for forward compatibility.</div>
         {error ? <div className="error">{error}</div> : null}
         {data ? (
           <div className="json-box mt12">
@@ -1370,7 +1370,7 @@ function SearchResultPage() {
               {data?.canonical_route ? (
                 <Link to={data.canonical_route}>Open canonical route</Link>
               ) : null}
-              <Link to={`/compute/${encodeURIComponent(query ?? "")}`}>Open as Compute Tx</Link>
+              <Link to={`/compute/${encodeURIComponent(query ?? "")}`}>Open as Compute Operation</Link>
               <Link to={`/objects/${encodeURIComponent(query ?? "")}`}>Open as Object</Link>
               <Link to={`/outputs/${encodeURIComponent(query ?? "")}`}>Open as Output</Link>
               <Link to={`/domains/${encodeURIComponent(query ?? "")}`}>Open as Domain</Link>
@@ -1443,7 +1443,7 @@ function SearchBar({ defaultValue, smartRedirect = false }: { defaultValue?: str
       </form>
       <div className="quick-nav">
         <Link to="/blocks">Blocks</Link>
-        <Link to="/txs">Transactions</Link>
+        <Link to="/txs">Operations</Link>
         <Link to="/miners">Miners</Link>
         <Link to="/telemetry">Telemetry</Link>
         <Link to="/domains/0">Domain #0</Link>
