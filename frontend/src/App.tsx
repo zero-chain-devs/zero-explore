@@ -163,19 +163,19 @@ function HeroMetrics({ stats }: { stats: NetworkStats | null }) {
     <section className="hero-metrics">
       <div className="hero-metrics-grid">
         <div className="metric-card">
-          <div className="metric-title">ZERO PRICE</div>
-          <div className="metric-value">$1.973 <span className="metric-sub">(-4.97%)</span></div>
+          <div className="metric-title">LATEST BLOCK</div>
+          <div className="metric-value">{stats?.latest_block_number ?? "-"}</div>
         </div>
         <div className="metric-card">
-          <div className="metric-title">TRANSACTIONS</div>
-          <div className="metric-value">{stats ? `${stats.latest_block_number * 130} (est.)` : "-"}</div>
+          <div className="metric-title">HASHRATE</div>
+          <div className="metric-value">{stats?.hashrate ?? "-"}</div>
         </div>
         <div className="metric-card">
-          <div className="metric-title">MED GAS PRICE</div>
+          <div className="metric-title">GAS PRICE</div>
           <div className="metric-value">{stats?.gas_price ?? "-"}</div>
         </div>
         <div className="metric-card">
-          <div className="metric-title">TRANSACTION HISTORY IN RECENT CHECKS</div>
+          <div className="metric-title">BLOCK HISTORY IN RECENT CHECKS</div>
           <div className="mini-chart-wrap">
             {chartPath ? (
               <svg className="mini-chart" viewBox="0 0 240 56" preserveAspectRatio="none" aria-hidden="true">
@@ -1454,6 +1454,7 @@ function SearchBar({ defaultValue, smartRedirect = false }: { defaultValue?: str
 
 export function App() {
   const [health, setHealth] = useState<NetworkHealth | null>(null);
+  const [stats, setStats] = useState<NetworkStats | null>(null);
   const aliveRef = useRef(true);
 
   useEffect(() => {
@@ -1465,9 +1466,10 @@ export function App() {
 
   usePolling(async () => {
     try {
-      const h = await api.networkHealth();
+      const [h, s] = await Promise.all([api.networkHealth(), api.networkStats()]);
       if (!aliveRef.current) return;
       setHealth(h);
+      setStats(s);
     } catch {
       if (!aliveRef.current) return;
       setHealth({
@@ -1477,6 +1479,7 @@ export function App() {
         checked_at_unix: 0,
         detail: "health check failed",
       });
+      setStats(null);
     }
   }, 5000);
 
@@ -1485,7 +1488,10 @@ export function App() {
     : "network status unknown";
 
   return (
-    <Shell lamp={health ? { rpc_ok: health.rpc_ok, detail: lampDetail } : undefined}>
+    <Shell
+      lamp={health ? { rpc_ok: health.rpc_ok, detail: lampDetail } : undefined}
+      stats={stats}
+    >
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/blocks" element={<BlocksPage />} />

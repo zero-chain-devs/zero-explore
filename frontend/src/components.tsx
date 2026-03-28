@@ -6,12 +6,20 @@ type NetworkLamp = {
   detail: string;
 };
 
+type MarketStripStats = {
+  latest_block_number: number;
+  gas_price: string;
+  hashrate: string;
+};
+
 export function Shell({
   children,
   lamp,
+  stats,
 }: {
   children: ReactNode;
   lamp?: NetworkLamp;
+  stats?: MarketStripStats | null;
 }) {
   const lampLabel = lamp?.rpc_ok ? "RPC OK" : "RPC DOWN";
 
@@ -20,8 +28,9 @@ export function Shell({
       <header className="site-header">
         <div className="market-strip">
           <div className="market-strip-inner">
-            <span className="market-item">ZERO Price: <b>$1.973</b> <em className="down">-4.97%</em></span>
-            <span className="market-item">Gas: <b>0.308 Gwei</b></span>
+            <span className="market-item">Latest Block: <b>{stats?.latest_block_number ?? "-"}</b></span>
+            <span className="market-item">Gas Price: <b>{stats?.gas_price ?? "-"}</b></span>
+            <span className="market-item">Hashrate: <b>{stats?.hashrate ?? "-"}</b></span>
           </div>
         </div>
 
