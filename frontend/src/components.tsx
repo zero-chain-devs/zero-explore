@@ -80,7 +80,7 @@ export function Shell({
                 <span className={`lamp ${lamp?.rpc_ok ? "green" : "red"}`} />
                 <span>{lampLabel}</span>
               </span>
-              <button className="ghost-btn" type="button">Status</button>
+              <button className="ghost-btn" type="button">Network</button>
             </div>
           </div>
         </div>
