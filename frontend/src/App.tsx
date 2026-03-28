@@ -182,7 +182,7 @@ function HeroMetrics({ stats }: { stats: NetworkStats | null }) {
                 <path d={chartPath} />
               </svg>
             ) : (
-              <div className="mini-chart-empty">collecting…</div>
+              <div className="mini-chart-empty">Waiting for enough block samples…</div>
             )}
           </div>
           <div className="mini-chart-axis">
@@ -270,7 +270,7 @@ function TopMinerRows({ miners }: { miners: MinerStatsResponse["items"] }) {
         {!miners.length ? (
           <tr>
             <td colSpan={4} className="muted">
-              No miner data yet.
+              No miner data available in the current window.
             </td>
           </tr>
         ) : null}
@@ -444,7 +444,7 @@ function HomePage() {
             {!hotAddresses?.items.length ? (
               <tr>
                 <td colSpan={3} className="muted">
-                  No hot addresses yet.
+                  No hot addresses are available yet.
                 </td>
               </tr>
             ) : null}
@@ -744,7 +744,7 @@ function AccountPage() {
             ))}
             {!(txs?.items.length ?? 0) ? (
               <tr>
-                <td colSpan={6} className="muted">No operations found for this address.</td>
+                <td colSpan={6} className="muted">No operations are available for this address.</td>
               </tr>
             ) : null}
           </tbody>
@@ -1053,7 +1053,7 @@ function TxsPage() {
             ))}
             {!(data?.items.length ?? 0) ? (
               <tr>
-                <td colSpan={7} className="muted">No operations yet.</td>
+                <td colSpan={7} className="muted">No operations are available yet.</td>
               </tr>
             ) : null}
           </tbody>
@@ -1210,7 +1210,7 @@ function TelemetryPage() {
             ))}
             {!probes.length ? (
               <tr>
-                <td colSpan={6} className="muted">No probe data yet.</td>
+                <td colSpan={6} className="muted">No probe data is available yet.</td>
               </tr>
             ) : null}
           </tbody>
