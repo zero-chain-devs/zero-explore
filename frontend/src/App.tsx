@@ -418,9 +418,9 @@ function HomePage() {
           <p className="muted" style={{ margin: "0 0 10px" }}>
             Derived from explorer activity observations and recent compute result polling, not a full historical operation index.
           </p>
-          <div className="row-end" style={{ justifyContent: "flex-start", gap: 8, marginBottom: 10 }}>
-            <span className="tiny-btn">window {recentCompute?.window_limit ?? 0}</span>
-            <span className="tiny-btn">updated {recentCompute ? toRelativeTime(recentCompute.observed_at_unix) : "-"}</span>
+          <div className="status-chip-row">
+            <span className="status-chip">window {recentCompute?.window_limit ?? 0}</span>
+            <span className="status-chip">updated {recentCompute ? toRelativeTime(recentCompute.observed_at_unix) : "-"}</span>
           </div>
           <HomeTxRows items={txWindow === "latest" ? (recentCompute?.items ?? []).slice(0, 6) : (recentCompute?.items ?? [])} />
           <div className="row-end">
@@ -433,9 +433,9 @@ function HomePage() {
         <p className="muted" style={{ margin: "0 0 10px" }}>
           Ranked from explorer-side address hit tracking. This is a hot list for the current observation window, not a canonical on-chain leaderboard.
         </p>
-        <div className="row-end" style={{ justifyContent: "flex-start", gap: 8, marginBottom: 10 }}>
-          <span className="tiny-btn">window {hotAddresses?.window_limit ?? 0}</span>
-          <span className="tiny-btn">updated {hotAddresses ? toRelativeTime(hotAddresses.observed_at_unix) : "-"}</span>
+        <div className="status-chip-row">
+          <span className="status-chip">window {hotAddresses?.window_limit ?? 0}</span>
+          <span className="status-chip">updated {hotAddresses ? toRelativeTime(hotAddresses.observed_at_unix) : "-"}</span>
         </div>
         <table className="table compact">
           <thead>

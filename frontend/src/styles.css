@@ -698,6 +698,23 @@ a {
   color: var(--text-secondary);
 }
 
+.status-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.status-chip {
+  border: 1px solid #d8e2f1;
+  background: #eef4fb;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: #355070;
+  font-weight: 600;
+}
+
 .list-rows {
   width: 100%;
 }
