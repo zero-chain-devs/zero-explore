@@ -199,6 +199,8 @@ struct RecentComputeItem {
 
 #[derive(Debug, Serialize)]
 struct RecentComputeResponse {
+    observed_at_unix: u64,
+    window_limit: usize,
     items: Vec<RecentComputeItem>,
 }
 
@@ -211,6 +213,8 @@ struct HotAddressItem {
 
 #[derive(Debug, Serialize)]
 struct HotAddressResponse {
+    observed_at_unix: u64,
+    window_limit: usize,
     items: Vec<HotAddressItem>,
 }
 
@@ -837,7 +841,11 @@ async fn list_recent_compute(
         let guard = state.activity.read().await;
         guard.recent_compute.iter().take(limit).cloned().collect()
     };
-    Json(RecentComputeResponse { items })
+    Json(RecentComputeResponse {
+        observed_at_unix: current_unix_secs(),
+        window_limit: limit,
+        items,
+    })
 }
 
 async fn list_recent_txs(
@@ -905,7 +913,11 @@ async fn list_hot_addresses(
             .then_with(|| b.last_seen_unix.cmp(&a.last_seen_unix))
     });
     items.truncate(limit);
-    Json(HotAddressResponse { items })
+    Json(HotAddressResponse {
+        observed_at_unix: current_unix_secs(),
+        window_limit: limit,
+        items,
+    })
 }
 
 async fn get_compute_result(

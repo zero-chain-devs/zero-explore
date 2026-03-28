@@ -101,6 +101,8 @@ export type RecentComputeItem = {
 };
 
 export type RecentComputeResponse = {
+  observed_at_unix: number;
+  window_limit: number;
   items: RecentComputeItem[];
 };
 
@@ -111,6 +113,8 @@ export type HotAddressItem = {
 };
 
 export type HotAddressResponse = {
+  observed_at_unix: number;
+  window_limit: number;
   items: HotAddressItem[];
 };
 
