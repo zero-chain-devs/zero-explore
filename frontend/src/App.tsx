@@ -360,9 +360,9 @@ function HomePage() {
 
       <Section title="Observation Sources">
         <div className="status-chip-row">
-          <span className="status-chip tracked">activity-tracked</span>
-          <span className="status-chip polled">polled RPC</span>
-          <span className="status-chip cached">cached response</span>
+          <span className="status-chip tracked" title="Explorer-side address and compute activity observations.">activity-tracked</span>
+          <span className="status-chip polled" title="Direct RPC polling against the configured backend node.">polled RPC</span>
+          <span className="status-chip cached" title="Backend cache snapshot used to avoid redundant upstream calls.">cached response</span>
         </div>
         <p className="muted" style={{ margin: "0" }}>
           Home metrics combine direct RPC polling, explorer-side activity tracking, and backend cache snapshots.
@@ -430,8 +430,12 @@ function HomePage() {
             Derived from explorer activity observations and recent compute result polling, not a full historical operation index.
           </p>
           <div className="status-chip-row">
-            <span className="status-chip">window {recentCompute?.window_limit ?? 0}</span>
-            <span className="status-chip">updated {recentCompute ? toRelativeTime(recentCompute.observed_at_unix) : "-"}</span>
+            <span className="status-chip" title="Number of recent compute observations retained for this panel.">
+              window {recentCompute?.window_limit ?? 0}
+            </span>
+            <span className="status-chip" title="Last time this panel was refreshed from explorer activity data.">
+              updated {recentCompute ? toRelativeTime(recentCompute.observed_at_unix) : "-"}
+            </span>
           </div>
           <HomeTxRows items={txWindow === "latest" ? (recentCompute?.items ?? []).slice(0, 6) : (recentCompute?.items ?? [])} />
           <div className="row-end">
@@ -445,8 +449,12 @@ function HomePage() {
           Ranked from explorer-side address hit tracking. This is a hot list for the current observation window, not a canonical on-chain leaderboard.
         </p>
         <div className="status-chip-row">
-          <span className="status-chip">window {hotAddresses?.window_limit ?? 0}</span>
-          <span className="status-chip">updated {hotAddresses ? toRelativeTime(hotAddresses.observed_at_unix) : "-"}</span>
+          <span className="status-chip" title="Maximum number of hot addresses retained for this observation window.">
+            window {hotAddresses?.window_limit ?? 0}
+          </span>
+          <span className="status-chip" title="Last time the hot-address ranking was refreshed.">
+            updated {hotAddresses ? toRelativeTime(hotAddresses.observed_at_unix) : "-"}
+          </span>
         </div>
         <table className="table compact">
           <thead>
