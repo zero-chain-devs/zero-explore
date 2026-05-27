@@ -10,7 +10,7 @@ use std::{
 use anyhow::{Context, Result};
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
     Json, Router,
@@ -259,6 +259,35 @@ struct BackendCache {
     domains: HashMap<u64, CachedValue<Value>>,
 }
 
+fn build_cors_layer() -> Result<Option<CorsLayer>> {
+    let raw = match std::env::var("ZERO_EXPLORER_ALLOWED_ORIGINS") {
+        Ok(value) => value,
+        Err(std::env::VarError::NotPresent) => return Ok(None),
+        Err(err) => return Err(err).context("failed to read ZERO_EXPLORER_ALLOWED_ORIGINS"),
+    };
+
+    let origins = raw
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            HeaderValue::from_str(value)
+                .with_context(|| format!("invalid CORS origin header value: {value}"))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    if origins.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(
+        CorsLayer::new()
+            .allow_origin(origins)
+            .allow_methods([Method::GET])
+            .allow_headers([]),
+    ))
+}
+
 #[derive(Debug, Serialize)]
 struct CacheDebugSection {
     entries: usize,
@@ -351,8 +380,12 @@ async fn main() -> Result<()> {
         .route("/api/debug/cache", get(debug_cache))
         .fallback_service(static_service)
         .with_state(state)
-        .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
+    let app = if let Some(cors) = build_cors_layer()? {
+        app.layer(cors)
+    } else {
+        app
+    };
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     info!(bind = %addr, frontend_dist = %frontend_dist, "zero explorer backend listening");
@@ -1638,6 +1671,15 @@ where
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::sync::{Mutex, OnceLock};
+
+    fn cors_env_guard() -> std::sync::MutexGuard<'static, ()> {
+        static GUARD: OnceLock<Mutex<()>> = OnceLock::new();
+        GUARD
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("cors env guard")
+    }
 
     fn temp_state_file(label: &str) -> PathBuf {
         let nanos = SystemTime::now()
@@ -1827,6 +1869,29 @@ mod tests {
         assert_eq!(summary.entries, 2);
         assert_eq!(summary.fresh, 1);
         assert_eq!(summary.stale, 1);
+    }
+
+    #[test]
+    fn test_build_cors_layer_defaults_to_disabled_without_env() {
+        let _guard = cors_env_guard();
+        std::env::remove_var("ZERO_EXPLORER_ALLOWED_ORIGINS");
+        assert!(build_cors_layer()
+            .expect("cors config should parse")
+            .is_none());
+    }
+
+    #[test]
+    fn test_build_cors_layer_accepts_explicit_origins() {
+        let _guard = cors_env_guard();
+        std::env::set_var(
+            "ZERO_EXPLORER_ALLOWED_ORIGINS",
+            "https://explorer.example.com, http://localhost:5173",
+        );
+
+        let layer = build_cors_layer().expect("cors config should parse");
+        assert!(layer.is_some());
+
+        std::env::remove_var("ZERO_EXPLORER_ALLOWED_ORIGINS");
     }
 
     #[tokio::test]
